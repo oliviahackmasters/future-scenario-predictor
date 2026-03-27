@@ -86,7 +86,7 @@
 
     #hmTrendChat .hm-top-grid{
       display:grid;
-      grid-template-columns:1.15fr 0.85fr;
+      grid-template-columns: minmax(0, 7fr) minmax(0, 3fr);
       gap:12px;
       margin:0 0 14px 0;
       width:100%;
@@ -344,6 +344,129 @@
         padding-top:0;
       }
     }
+
+#hmTrendChat .hm-plotter{
+  margin-top:14px;
+}
+
+#hmTrendChat .hm-plot-shell{
+  position:relative;
+  padding:42px 56px 42px 56px;
+}
+
+#hmTrendChat .hm-plot-grid{
+  position:relative;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  grid-template-rows:1fr 1fr;
+  gap:12px;
+}
+
+#hmTrendChat .hm-plot-cell{
+  border:1px solid var(--hm-copper);
+  min-height:250px;
+  padding:26px 22px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  background:rgba(255,255,255,0.01);
+}
+
+#hmTrendChat .hm-plot-cell-title{
+  font-size:18px;
+  line-height:1.2;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:1.4px;
+  color:var(--hm-white);
+  margin:0 0 18px 0;
+}
+
+#hmTrendChat .hm-plot-cell-desc{
+  font-size:12px;
+  line-height:1.6;
+  text-transform:uppercase;
+  letter-spacing:1.1px;
+  color:rgba(255,255,255,0.92);
+  max-width:280px;
+}
+
+#hmTrendChat .hm-plot-axis{
+  position:absolute;
+  font-size:11px;
+  line-height:1;
+  text-transform:uppercase;
+  letter-spacing:1.4px;
+  color:var(--hm-white);
+  white-space:nowrap;
+}
+
+#hmTrendChat .hm-plot-axis-top{
+  top:8px;
+  left:50%;
+  transform:translateX(-50%);
+}
+
+#hmTrendChat .hm-plot-axis-bottom{
+  bottom:8px;
+  left:50%;
+  transform:translateX(-50%);
+}
+
+#hmTrendChat .hm-plot-axis-left{
+  left: -40px;
+  top: 50%;
+  transform: translateY(-50%) rotate(-90deg);
+  transform-origin: center;
+}
+
+#hmTrendChat .hm-plot-axis-right{
+  right: -38px;
+  top: 50%;
+  transform: translateY(-50%) rotate(90deg);
+  transform-origin: center;
+}
+
+#hmTrendChat .hm-plot-marker{
+  position:absolute;
+  width:14px;
+  height:14px;
+  border-radius:999px;
+  background:var(--hm-copper);
+  border:2px solid var(--hm-white);
+  box-shadow:0 0 0 4px rgba(209,128,87,0.18);
+  left:74%;
+  top:74%;
+  transform:translate(-50%, -50%);
+  z-index:3;
+}
+
+@media (max-width: 900px){
+  #hmTrendChat .hm-plot-shell{
+    padding:36px 26px 36px 26px;
+  }
+
+  #hmTrendChat .hm-plot-cell{
+    min-height:180px;
+    padding:18px 14px;
+  }
+
+  #hmTrendChat .hm-plot-cell-title{
+    font-size:14px;
+  }
+
+  #hmTrendChat .hm-plot-cell-desc{
+    font-size:10px;
+  }
+
+  #hmTrendChat .hm-plot-axis{
+    font-size:9px;
+    letter-spacing:1px;
+  }
+}
+
   </style>
 </head>
 <body>
@@ -365,7 +488,44 @@
         <section class="hm-card">
           <div class="hm-msg-title">Scenario likelihoods</div>
           <div class="hm-results-grid" id="hmScenarioGrid"></div>
+
+          <div class="hm-plotter">
+  <div class="hm-msg-title">Scenario Plotter</div>
+
+  <div class="hm-plot-shell">
+    <div class="hm-plot-axis hm-plot-axis-top">Fragmented collapsing regime in Iran</div>
+    <div class="hm-plot-axis hm-plot-axis-bottom">Stable cohesive regime in Iran</div>
+    <div class="hm-plot-axis hm-plot-axis-left">Contained conflict</div>
+    <div class="hm-plot-axis hm-plot-axis-right">Full regional war</div>
+
+    <div class="hm-plot-grid">
+      <div class="hm-plot-cell">
+        <div class="hm-plot-cell-title">Shattered Diplomacy</div>
+        <div class="hm-plot-cell-desc">Post-Iran fragmentation and multiple weak political actions</div>
+      </div>
+
+      <div class="hm-plot-cell">
+        <div class="hm-plot-cell-title">Chaos + Collapse</div>
+        <div class="hm-plot-cell-desc">Multi-state regional war and a dysfunctional government in Iran</div>
+      </div>
+
+      <div class="hm-plot-cell">
+        <div class="hm-plot-cell-title">Cold Containment</div>
+        <div class="hm-plot-cell-desc">Managed escalation, minimal or no ground troops</div>
+      </div>
+
+      <div class="hm-plot-cell">
+        <div class="hm-plot-cell-title">Burning Strait</div>
+        <div class="hm-plot-cell-desc">Full regional war with no change in political ideology in Iran</div>
+      </div>
+
+      <!-- <div class="hm-plot-marker" id="hmPlotMarker"></div> -->
+    </div>
+  </div>
+</div>
         </section>
+
+        
 
         <section class="hm-card">
           <div class="hm-msg-title">Combined assessment</div>
