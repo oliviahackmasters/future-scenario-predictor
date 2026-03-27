@@ -307,14 +307,11 @@ export default async function handler(req, res) {
     return json(res, 405, { error: "method_not_allowed" });
   }
 
-  if (!process.env.OPENAI_API_KEY) {
-    return json(res, 500, {
-      error: "missing_openai_api_key",
-      message: "OPENAI_API_KEY is not set."
-    });
-  }
-
   try {
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY is not set");
+    }
+
     const topicConfig = getTopicConfig(req.query.topic);
     const articles = await collectTopicCoverage(topicConfig);
     const assessment = await generateScenarioAssessment(topicConfig, articles);
@@ -334,7 +331,8 @@ export default async function handler(req, res) {
     console.error("Scenario assessment failed:", error);
     return json(res, 500, {
       error: "scenario_assessment_failed",
-      message: error.message
+      message: error.message,
+      stack: process.env.NODE_ENV !== "production" ? error.stack : undefined
     });
   }
 }
