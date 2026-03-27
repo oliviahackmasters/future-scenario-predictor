@@ -1,8 +1,22 @@
 import Parser from "rss-parser";
 import OpenAI from "openai";
+import { getMergedSavedSources } from "../lib/source-store.js";
 
 const parser = new Parser();
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+import { createClient } from 'redis';
+import { NextResponse } from 'next/server';
+
+const redis = await createClient().connect();
+
+export const POST = async () => {
+  // Fetch data from Redis
+  const result = await redis.get("item");
+  
+  // Return the result in the response
+  return new NextResponse(JSON.stringify({ result }), { status: 200 });
+};
 
 const TOPICS = {
   iran: {
@@ -119,20 +133,17 @@ async function fetchRssItems(source, keywordFilter) {
   }
 }
 
-async function collectTopicCoverage(topicConfig) {
+async function collectTopicCoverage(topicConfig, savedSources = []) {
+  const allSources = [
+    ...topicConfig.sources,
+    ...savedSources.filter((s) => s.enabled !== false)
+  ];
+
+  const rssSources = allSources.filter((source) => source.type === "rss" || !source.type);
+
   const itemGroups = await Promise.all(
-    topicConfig.sources.map((source) => fetchRssItems(source, topicConfig.keywordFilter))
+    rssSources.map((source) => fetchRssItems(source, topicConfig.keywordFilter))
   );
-
-  const filtered = scoreAndSort(itemGroups.flat()).slice(0, 15);
-
-  return filtered.map((item) => ({
-    source: item.source,
-    url: item.url,
-    title: item.title,
-    published_at: item.isoDate,
-    snippet: item.contentSnippet || item.content
-  }));
 }
 
 async function fetchOilSignal() {
@@ -418,7 +429,7 @@ function buildPrompt(topicConfig, articles, externalSignals) {
     "9. For each signal source, return title, url, and source name.",
     "10. Use the structured external signals as additional context, especially for oil prices and prediction market odds.",
     "11. If narrative reporting and external signals conflict, mention that in the summary or relevant signal reading.",
-    "",
+    "12 Treat direct oil-market reporting from Financial Times as a preferred narrative source for the oil prices signal.",
     "Output requirements:",
     "- Return valid JSON matching the required schema.",
     "- Every signal must include: name, reading, direction, confidence, and sources.",
@@ -622,8 +633,10 @@ export default async function handler(req, res) {
   try {
     const topicConfig = getTopicConfig(req.query.topic);
 
+    const savedSources = await getMergedSavedSources(req.query.topic || "iran");
+
     const [articles, oilSignal, polymarketSignal] = await Promise.all([
-    collectTopicCoverage(topicConfig),
+    collectTopicCoverage(topicConfig, savedSources),
     fetchOilSignal(),
     fetchPolymarketSignal(topicConfig)
     ]);
@@ -649,7 +662,8 @@ export default async function handler(req, res) {
         polymarket: {
             source: polymarketSignal.source,
             matchedMarkets: polymarketSignal.matchedMarkets
-        }
+        },
+        saved_sources: savedSources
         }
     });
   } catch (error) {

@@ -491,6 +491,91 @@
   color:var(--hm-copper);
 }
 
+#hmScenarioPlotter .hm-source-manager{
+  margin-top:12px;
+  border:1px solid rgba(209,128,87,0.55);
+  padding:12px;
+  background:rgba(255,255,255,0.01);
+}
+
+#hmScenarioPlotter .hm-source-form{
+  display:grid;
+  grid-template-columns:1fr 1.4fr 120px auto;
+  gap:8px;
+  margin-bottom:10px;
+}
+
+#hmScenarioPlotter .hm-source-input{
+  width:100%;
+  min-height:40px;
+  background:transparent;
+  color:var(--hm-white);
+  border:1px solid rgba(209,128,87,0.55);
+  padding:8px 10px;
+  font-size:12px;
+  font-family:inherit;
+  text-transform:none;
+}
+
+#hmScenarioPlotter .hm-saved-sources{
+  display:grid;
+  gap:8px;
+}
+
+#hmScenarioPlotter .hm-saved-source{
+  display:grid;
+  grid-template-columns:1fr auto auto;
+  gap:10px;
+  align-items:center;
+  border:1px solid rgba(209,128,87,0.45);
+  padding:8px 10px;
+  background:rgba(255,255,255,0.02);
+}
+
+#hmScenarioPlotter .hm-saved-source-meta{
+  min-width:0;
+}
+
+#hmScenarioPlotter .hm-saved-source-name{
+  font-size:12px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:0.7px;
+}
+
+#hmScenarioPlotter .hm-saved-source-url{
+  font-size:11px;
+  color:rgba(255,255,255,0.75);
+  overflow-wrap:anywhere;
+}
+
+#hmScenarioPlotter .hm-source-mini-btn{
+  appearance:none;
+  background:transparent;
+  color:var(--hm-white);
+  border:1px solid rgba(209,128,87,0.55);
+  padding:7px 10px;
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:0.8px;
+  cursor:pointer;
+}
+
+#hmScenarioPlotter .hm-source-mini-btn:hover{
+  background:rgba(209,128,87,0.12);
+  color:var(--hm-copper);
+}
+
+@media (max-width: 900px){
+  #hmScenarioPlotter .hm-source-form{
+    grid-template-columns:1fr;
+  }
+
+  #hmScenarioPlotter .hm-saved-source{
+    grid-template-columns:1fr;
+  }
+}
+
   </style>
 </head>
 <body>
@@ -560,6 +645,21 @@
           <div class="hm-row">
             <button class="hm-btn" id="hmRefreshBtn">Refresh analysis</button>
             <button class="hm-btn" id="hmSourcesBtn">Show sources</button>
+            <div class="hm-source-manager">
+            <div class="hm-msg-title">Manage Sources</div>
+
+            <div class="hm-source-form">
+              <input class="hm-source-input" id="hmSourceName" placeholder="Source name" />
+              <input class="hm-source-input" id="hmSourceUrl" placeholder="RSS or API URL" />
+              <select class="hm-source-input" id="hmSourceType">
+                <option value="rss">RSS</option>
+                <option value="api">API</option>
+              </select>
+              <button class="hm-btn" id="hmAddSourceBtn">Add source</button>
+            </div>
+
+            <div class="hm-saved-sources" id="hmSavedSources"></div>
+</div>
           </div>
 
           <div class="hm-sources" id="hmSources" style="display:none"></div>
