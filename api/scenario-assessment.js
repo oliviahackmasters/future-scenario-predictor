@@ -37,7 +37,9 @@ const TOPICS = {
     sources: [
       { name: "BBC World", url: "http://feeds.bbci.co.uk/news/world/rss.xml" },
       { name: "BBC Middle East", url: "http://feeds.bbci.co.uk/news/world/middle_east/rss.xml" },
-      { name: "Reuters World", url: "https://feeds.reuters.com/Reuters/worldNews" }
+      { name: "Reuters World", url: "https://feeds.reuters.com/Reuters/worldNews" },
+      { name: "FT Markets", url: "https://www.ft.com/markets?format=rss" },
+      { name: "FT Oil", url: "https://www.ft.com/oil?format=rss" }
     ],
     keywordFilter: [
       "iran",
@@ -400,11 +402,28 @@ function buildPrompt(topicConfig, articles, externalSignals) {
     ...topicConfig.trackedSignals.map((signal) => `- ${signal}`),
     "",
     "Scenarios:",
-    ...topicConfig.scenarios.map((scenario, index) => `${index + 1}. ${scenario.name} = ${scenario.description}`),
+    ...topicConfig.scenarios.map(
+      (scenario, index) => `${index + 1}. ${scenario.name} = ${scenario.description}`
+    ),
     "",
-    "Use both the source summaries and the structured external signals below.",
-    "If a direct market or oil feed conflicts with narrative reporting, note the conflict.",
-    "Do not invent facts. Distinguish evidence from inference.",
+    "Tasks:",
+    "1. Read the supplied source summaries.",
+    "2. Extract only evidence relevant to the tracked signals.",
+    "3. Score each scenario from 0 to 100 based on the signals.",
+    "4. Normalize the scenario scores so the total equals 100.",
+    "5. Give a concise summary of the current assessment.",
+    "6. Do not invent facts. Distinguish evidence from inference.",
+    "7. For each tracked signal, include 1 to 3 supporting source items from the supplied articles.",
+    "8. Only cite supplied articles as sources for signal-level evidence.",
+    "9. For each signal source, return title, url, and source name.",
+    "10. Use the structured external signals as additional context, especially for oil prices and prediction market odds.",
+    "11. If narrative reporting and external signals conflict, mention that in the summary or relevant signal reading.",
+    "",
+    "Output requirements:",
+    "- Return valid JSON matching the required schema.",
+    "- Every signal must include: name, reading, direction, confidence, and sources.",
+    "- sources must be an array of objects with title, url, and source.",
+    "- Do not include sources that are not present in the supplied articles list.",
     "",
     "Articles:",
     JSON.stringify(articles, null, 2),
@@ -437,25 +456,38 @@ const responseSchema = {
       }
     },
     signals: {
-      type: "array",
-      items: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          name: { type: "string" },
-          reading: { type: "string" },
-          direction: {
-            type: "string",
-            enum: ["escalatory", "neutral", "de-escalatory"]
-          },
-          confidence: {
-            type: "string",
-            enum: ["Low", "Medium", "High"]
-          }
-        },
-        required: ["name", "reading", "direction", "confidence"]
-      }
-    }
+        type: "array",
+        items: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+            name: { type: "string" },
+            reading: { type: "string" },
+            direction: {
+                type: "string",
+                enum: ["escalatory", "neutral", "de-escalatory"]
+            },
+            confidence: {
+                type: "string",
+                enum: ["Low", "Medium", "High"]
+            },
+            sources: {
+                type: "array",
+                items: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                    title: { type: "string" },
+                    url: { type: "string" },
+                    source: { type: "string" }
+                },
+                required: ["title", "url", "source"]
+                }
+            }
+            },
+            required: ["name", "reading", "direction", "confidence", "sources"]
+        }
+        }
   },
   required: ["summary", "scenarios", "signals"]
 };
