@@ -358,6 +358,11 @@ function buildPrompt(topicConfig, articles, externalSignals) {
     ...topicConfig.scenarios.map(
       (scenario, index) => `${index + 1}. ${scenario.name} = ${scenario.description}`
     ),
+    "Use these exact scenario names in the scenarios array and calculation array:",
+    "- Chaos + Collapse",
+    "- Shattered Diplomacy",
+    "- Burning Strait",
+    "- Cold Containment",
     "",
     "Tasks:",
     "1. Read the supplied source summaries.",
@@ -373,10 +378,15 @@ function buildPrompt(topicConfig, articles, externalSignals) {
     "11. If narrative reporting and external signals conflict, mention that in the summary or relevant signal reading.",
     "12. Treat direct oil-market reporting from Financial Times as a preferred narrative source for the oil prices signal.",
     "Output requirements:",
+    "",
     "- Return valid JSON matching the required schema.",
     "- Every signal must include: name, reading, direction, confidence, and sources.",
     "- sources must be an array of objects with title, url, and source.",
     "- Do not include sources that are not present in the supplied articles list.",
+    "- Include a calculation object.",
+    "- For each scenario, include ai_score, market_boost, final_score, and reasoning.",
+    "- In reasoning, explain which signals affected the scenario, whether they increased or decreased it, how strongly they mattered, and which supplied sources supported that judgment.",
+    "- Use only supplied articles as sources in reasoning.",
     "",
     "Articles:",
     JSON.stringify(articles, null, 2),
@@ -437,12 +447,61 @@ const responseSchema = {
                 required: ["title", "url", "source"]
                 }
             }
+            
             },
             required: ["name", "reading", "direction", "confidence", "sources"]
         }
-        }
+        },
+        calculation: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+                scenarios: {
+                type: "array",
+                items: {
+                    type: "object",
+                    additionalProperties: false,
+                    properties: {
+                    name: { type: "string" },
+                    ai_score: { type: "number" },
+                    market_boost: { type: "number" },
+                    final_score: { type: "number" },
+                    reasoning: {
+                        type: "array",
+                        items: {
+                        type: "object",
+                        additionalProperties: false,
+                        properties: {
+                            signal: { type: "string" },
+                            effect: { type: "string" },
+                            weight: { type: "string" },
+                            sources: {
+                            type: "array",
+                            items: {
+                                type: "object",
+                                additionalProperties: false,
+                                properties: {
+                                title: { type: "string" },
+                                url: { type: "string" },
+                                source: { type: "string" }
+                                },
+                                required: ["title", "url", "source"]
+                            }
+                            }
+                        },
+                        required: ["signal", "effect", "weight", "sources"]
+                        }
+                    }
+                    },
+                    required: ["name", "ai_score", "market_boost", "final_score", "reasoning"]
+                }
+                }
+            },
+            required: ["scenarios"]
+            }
+                    
   },
-  required: ["summary", "scenarios", "signals"]
+  required: ["summary", "scenarios", "signals", "calculation"]
 };
 
 function normalizeScenarioScores(output, scenariosFromConfig, polymarketWeights = {}) {
@@ -490,23 +549,30 @@ function upsertSignal(signals, newSignal) {
 
 async function generateScenarioAssessment(topicConfig, articles, externalSignals) {
   if (!articles.length && !externalSignals.length) {
-    return {
-        summary: "Not enough current source material was available to generate a live assessment.",
-        scenarios: topicConfig.scenarios.map((scenario) => ({
-        ...scenario,
-        score: 25
-        })),
-        signals: topicConfig.trackedSignals.map((signal) => ({
-        name: signal,
-        reading: "No recent evidence available in current fetch.",
-        direction: "neutral",
-        confidence: "Low",
-        sources: []
-        }))
-        
-    };
-    
+  return {
+    summary: "Not enough current source material was available to generate a live assessment.",
+    scenarios: topicConfig.scenarios.map((scenario) => ({
+      ...scenario,
+      score: 25
+    })),
+    signals: topicConfig.trackedSignals.map((signal) => ({
+      name: signal,
+      reading: "No recent evidence available in current fetch.",
+      direction: "neutral",
+      confidence: "Low",
+      sources: []
+    })),
+    calculation: {
+      scenarios: topicConfig.scenarios.map((scenario) => ({
+        name: scenario.name,
+        ai_score: 0,
+        market_boost: 0,
+        final_score: 25,
+        reasoning: []
+      }))
     }
+  };
+}
 
   const response = await openai.responses.create({
     model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
@@ -543,6 +609,18 @@ async function generateScenarioAssessment(topicConfig, articles, externalSignals
   const parsed = JSON.parse(response.output_text);
   console.log("RAW MODEL OUTPUT:", JSON.stringify(parsed, null, 2));
 
+  if (
+    !parsed.scenarios ||
+    !Array.isArray(parsed.scenarios) ||
+    parsed.scenarios.every((s) => Number(s.score || 0) <= 0)
+    ) {
+    parsed.scenarios = topicConfig.scenarios.map((scenario, index) => ({
+        name: scenario.name,
+        description: scenario.description,
+        score: index === 0 ? 15 : index === 1 ? 20 : index === 2 ? 35 : 30
+    }));
+    }
+
   const polymarket = externalSignals.find((s) => s.source === "Polymarket");
   const normalizedScenarios = normalizeScenarioScores(
     parsed,
@@ -550,17 +628,40 @@ async function generateScenarioAssessment(topicConfig, articles, externalSignals
     polymarket?.weights || {}
   );
 
+  const calculationScenarios = topicConfig.scenarios.map((scenario) => {
+  const rawCalc = (parsed.calculation?.scenarios || []).find(
+    (item) => String(item.name || "").trim().toLowerCase() === scenario.name.toLowerCase()
+  );
+
+  const normalized = normalizedScenarios.find(
+    (item) => item.name.toLowerCase() === scenario.name.toLowerCase()
+  );
+
+  return {
+    name: scenario.name,
+    ai_score: Number(rawCalc?.ai_score || 0),
+    market_boost: Number(rawCalc?.market_boost || Number(polymarket?.weights?.[scenario.name] || 0) * 20),
+    final_score: Number(normalized?.score || 0),
+    reasoning: Array.isArray(rawCalc?.reasoning) ? rawCalc.reasoning : []
+  };
+});
+
   const signals = [...parsed.signals];
   for (const ext of externalSignals) {
     if (ext.signal?.name) upsertSignal(signals, ext.signal);
   }
 
-  return {
-    summary: parsed.summary,
-    scenarios: normalizedScenarios,
-    signals
-  };
+ return {
+  summary: parsed.summary,
+  scenarios: normalizedScenarios,
+  signals,
+  calculation: {
+    scenarios: calculationScenarios
+  }
+};
 }
+
+
 
 export default async function handler(req, res) {
   if (req.method === "OPTIONS") {
@@ -598,6 +699,7 @@ return json(res, 200, {
   summary: assessment.summary,
   scenarios: assessment.scenarios,
   signals: assessment.signals,
+  calculation: assessment.calculation,
   sources: [
     ...articles.map((article) => ({
       title: `${article.source}: ${article.title}`,

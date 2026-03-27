@@ -576,6 +576,92 @@
   }
 }
 
+
+#hmScenarioPlotter .hm-calc-panel{
+  margin-top:12px;
+  border:1px solid rgba(209,128,87,0.55);
+  padding:12px;
+  background:rgba(255,255,255,0.01);
+}
+
+#hmScenarioPlotter .hm-calc-scenario{
+  border:1px solid rgba(209,128,87,0.45);
+  padding:12px;
+  margin-bottom:10px;
+  background:rgba(255,255,255,0.02);
+}
+
+#hmScenarioPlotter .hm-calc-scenario:last-child{
+  margin-bottom:0;
+}
+
+#hmScenarioPlotter .hm-calc-title{
+  font-size:12px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:0.8px;
+  margin:0 0 8px 0;
+}
+
+#hmScenarioPlotter .hm-calc-meta{
+  font-size:11px;
+  line-height:1.6;
+  color:rgba(255,255,255,0.84);
+  margin-bottom:8px;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+}
+
+#hmScenarioPlotter .hm-calc-reason{
+  border-top:1px solid rgba(209,128,87,0.2);
+  padding-top:8px;
+  margin-top:8px;
+}
+
+#hmScenarioPlotter .hm-calc-reason:first-of-type{
+  border-top:0;
+  padding-top:0;
+  margin-top:0;
+}
+
+#hmScenarioPlotter .hm-calc-signal{
+  font-size:11px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:0.7px;
+  margin-bottom:4px;
+}
+
+#hmScenarioPlotter .hm-calc-effect{
+  font-size:11px;
+  line-height:1.5;
+  color:rgba(255,255,255,0.82);
+  margin-bottom:6px;
+}
+
+#hmScenarioPlotter .hm-calc-sources{
+  display:grid;
+  gap:5px;
+}
+
+#hmScenarioPlotter .hm-calc-source{
+  display:block;
+  color:var(--hm-white);
+  text-decoration:none;
+  border:1px solid rgba(209,128,87,0.35);
+  padding:5px 7px;
+  font-size:10px;
+  line-height:1.4;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  background:rgba(255,255,255,0.02);
+}
+
+#hmScenarioPlotter .hm-calc-source:hover{
+  background:rgba(209,128,87,0.12);
+  color:var(--hm-copper);
+}
+
   </style>
 </head>
 <body>
@@ -597,6 +683,12 @@
         <section class="hm-card">
           <div class="hm-msg-title">Scenario likelihoods</div>
           <div class="hm-results-grid" id="hmScenarioGrid"></div>
+
+          <div class="hm-row">
+            <button class="hm-btn" id="hmCalcToggleBtn">How was this calculated?</button>
+          </div>
+
+          <div class="hm-calc-panel" id="hmCalcPanel" style="display:none"></div>
 
           <div class="hm-plotter">
   <div class="hm-msg-title">Scenario Plotter</div>
@@ -643,8 +735,10 @@
           </div>
 
           <div class="hm-row">
-            <button class="hm-btn" id="hmRefreshBtn">Refresh analysis</button>
-            <button class="hm-btn" id="hmSourcesBtn">Show sources</button>
+            <div class="hm-row">
+              <button class="hm-btn" id="hmRefreshBtn">Refresh analysis</button>
+              <button class="hm-btn" id="hmSourcesBtn">Show sources</button>
+            </div>
             <div class="hm-source-manager">
             <div class="hm-msg-title">Manage Sources</div>
 
@@ -711,38 +805,64 @@
           name: "Oil prices",
           reading: "Elevated and volatile relative to baseline.",
           direction: "escalatory",
-          confidence: "High"
+          confidence: "High",
+          sources: []
         },
         {
           name: "Troop deployment",
           reading: "Increased military presence and readiness signals.",
           direction: "escalatory",
-          confidence: "Medium"
+          confidence: "Medium",
+          sources: []
         },
         {
           name: "Government stability",
           reading: "No clear proof of state collapse in current demo snapshot.",
           direction: "neutral",
-          confidence: "Medium"
+          confidence: "Medium",
+          sources: []
         },
         {
           name: "Diplomacy / ceasefire",
           reading: "Weak momentum toward de-escalation.",
           direction: "escalatory",
-          confidence: "Medium"
+          confidence: "Medium",
+          sources: []
         },
         {
           name: "Maritime disruption",
           reading: "Strait-related risk remains elevated.",
           direction: "escalatory",
-          confidence: "High"
+          confidence: "High",
+          sources: []
         }
       ],
       sources: [
         { title: "BBC World", url: "#" },
         { title: "World Monitor", url: "#" },
         { title: "Selected social feed", url: "#" }
-      ]
+      ],
+      calculation: {
+        scenarios: [
+          {
+            name: "Burning Strait",
+            ai_score: 40,
+            market_boost: 7,
+            final_score: 47,
+            reasoning: [
+              {
+                signal: "Maritime disruption",
+                effect: "Increased likelihood due to elevated Strait-related risk.",
+                weight: "high",
+                sources: [
+                  { title: "BBC Middle East", url: "#", source: "BBC" }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+      
     };
 
     const scenarioGrid = document.getElementById("hmScenarioGrid");
@@ -759,6 +879,8 @@ const sourceUrlInput = document.getElementById("hmSourceUrl");
 const sourceTypeInput = document.getElementById("hmSourceType");
 const addSourceBtn = document.getElementById("hmAddSourceBtn");
 const savedSourcesEl = document.getElementById("hmSavedSources");
+const calcToggleBtn = document.getElementById("hmCalcToggleBtn");
+const calcPanel = document.getElementById("hmCalcPanel");
 
     function relativeTime(dateString) {
       const date = new Date(dateString);
@@ -777,6 +899,7 @@ const savedSourcesEl = document.getElementById("hmSavedSources");
     }
 
     function render(data) {
+      renderCalculation(data.calculation);
       scenarioGrid.innerHTML = (data.scenarios || []).map(item => `
         <div class="hm-result-card">
           <div class="hm-score-row">
@@ -852,9 +975,15 @@ const savedSourcesEl = document.getElementById("hmSavedSources");
       sourcesBtn.textContent = hidden ? "Hide sources" : "Show sources";
     });
 
-    function renderSavedSources(items) {
+    calcToggleBtn.addEventListener("click", () => {
+  const hidden = calcPanel.style.display === "none";
+  calcPanel.style.display = hidden ? "block" : "none";
+  calcToggleBtn.textContent = hidden ? "Hide calculation" : "How was this calculated?";
+});
+
+ function renderSavedSources(items) {
   savedSourcesEl.innerHTML = (items || []).map((item) => `
-    <div class="hm-saved-source">
+    <div class="hm-saved-source" data-enabled="${item.enabled === false ? "false" : "true"}">
       <div class="hm-saved-source-meta">
         <div class="hm-saved-source-name">${item.name} ${item.enabled === false ? "(disabled)" : ""}</div>
         <div class="hm-saved-source-url">${item.url}</div>
@@ -929,18 +1058,45 @@ savedSourcesEl.addEventListener("click", async (event) => {
   }
 
   if (action === "toggle") {
-    const currentRow = btn.closest(".hm-saved-source");
-    const isDisabled = currentRow?.textContent.includes("(disabled)");
+  const currentRow = btn.closest(".hm-saved-source");
+  const isDisabled = currentRow?.dataset.enabled === "false";
 
-    await fetch(SOURCES_API_URL, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, enabled: isDisabled })
-    });
+  await fetch(SOURCES_API_URL, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, enabled: isDisabled })
+  });
 
-    await loadSavedSources();
-  }
+  await loadSavedSources();
+}
 });
+
+function renderCalculation(calculation) {
+  const items = calculation?.scenarios || [];
+
+  calcPanel.innerHTML = items.map((scenario) => `
+    <div class="hm-calc-scenario">
+      <div class="hm-calc-title">${scenario.name}</div>
+      <div class="hm-calc-meta">
+        AI score: ${scenario.ai_score} | Market boost: ${scenario.market_boost} | Final score: ${scenario.final_score}%
+      </div>
+
+      ${(scenario.reasoning || []).map((reason) => `
+        <div class="hm-calc-reason">
+          <div class="hm-calc-signal">${reason.signal}</div>
+          <div class="hm-calc-effect">${reason.effect} (${reason.weight})</div>
+          <div class="hm-calc-sources">
+            ${(reason.sources || []).map((src) => `
+              <a class="hm-calc-source" href="${src.url}" target="_blank" rel="noopener noreferrer">
+                ${src.source}: ${src.title}
+              </a>
+            `).join("")}
+          </div>
+        </div>
+      `).join("")}
+    </div>
+  `).join("");
+}
 
 addSourceBtn.addEventListener("click", addSource);
 loadSavedSources();
