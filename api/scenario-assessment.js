@@ -37,24 +37,32 @@ const TOPICS = {
       "prediction market odds"
     ],
     sources: [
-      { name: "BBC World", url: "http://feeds.bbci.co.uk/news/world/rss.xml" },
-      { name: "BBC Middle East", url: "http://feeds.bbci.co.uk/news/world/middle_east/rss.xml" },
-      { name: "Reuters World", url: "https://feeds.reuters.com/Reuters/worldNews" },
-      { name: "FT Markets", url: "https://www.ft.com/markets?format=rss" },
-      { name: "FT Oil", url: "https://www.ft.com/oil?format=rss" }
+        { name: "BBC World", url: "http://feeds.bbci.co.uk/news/world/rss.xml" },
+        { name: "BBC Middle East", url: "http://feeds.bbci.co.uk/news/world/middle_east/rss.xml" },
+        { name: "Reuters World", url: "https://www.reutersagency.com/feed/?best-topics=world&post_type=best" },
+        { name: "FT Markets", url: "https://www.ft.com/markets?format=rss" },
+        { name: "FT Oil", url: "https://www.ft.com/oil?format=rss" },
+        { name: "Al Jazeera", url: "https://www.aljazeera.com/xml/rss/all.xml" },
+        { name: "FT Energy", url: "https://www.ft.com/energy?format=rss" },
+        { name: "Guardian World", url: "https://www.theguardian.com/world/rss" }
     ],
     keywordFilter: [
-      "iran",
-      "tehran",
-      "strait of hormuz",
-      "hormuz",
-      "israel",
-      "us military",
-      "troops",
-      "oil",
-      "ceasefire",
-      "sanctions"
-    ],
+        "iran",
+        "tehran",
+        "strait of hormuz",
+        "hormuz",
+        "israel",
+        "us military",
+        "troops",
+        "oil",
+        "ceasefire",
+        "sanctions",
+        "gulf",
+        "missile",
+        "airstrike",
+        "shipping",
+        "energy"
+        ],
     polymarketSearchTerms: [
       "iran",
       "hormuz",
@@ -133,11 +141,32 @@ async function collectTopicCoverage(topicConfig, savedSources = []) {
 
   const rssSources = uniqueSources.filter((source) => source.type === "rss" || !source.type);
 
+  console.log("RSS SOURCES USED:", rssSources.map(s => ({
+    name: s.name,
+    url: s.url,
+    type: s.type || "rss"
+  })));
+
   const itemGroups = await Promise.all(
     rssSources.map((source) => fetchRssItems(source, topicConfig.keywordFilter))
   );
 
-  const filtered = scoreAndSort(itemGroups.flat()).slice(0, 15);
+  const flattened = itemGroups.flat();
+
+  console.log(
+    "FETCHED ARTICLE COUNTS BY SOURCE:",
+    flattened.reduce((acc, item) => {
+      acc[item.source] = (acc[item.source] || 0) + 1;
+      return acc;
+    }, {})
+  );
+
+  const filtered = scoreAndSort(flattened).slice(0, 15);
+
+  console.log(
+    "FINAL FILTERED SOURCES:",
+    filtered.map(item => item.source)
+  );
 
   return filtered.map((item) => ({
     source: item.source,
