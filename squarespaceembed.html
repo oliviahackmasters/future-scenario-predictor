@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Geopolitical Scenario Tracker</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --panel-2: #1f2937;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --line: #334155;
+      --accent: #38bdf8;
+      --good: #22c55e;
+      --warn: #f59e0b;
+      --bad: #ef4444;
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: transparent;
+      color: var(--text);
+    }
+
+    .gp-widget {
+      width: 100%;
+      max-width: 1100px;
+      margin: 0 auto;
+      background: linear-gradient(180deg, rgba(15,23,42,.98), rgba(17,24,39,.98));
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: 24px;
+      box-shadow: 0 16px 48px rgba(0,0,0,.28);
+    }
+
+    .gp-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-start;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .gp-title {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.1;
+      font-weight: 700;
+    }
+
+    .gp-subtitle {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+      max-width: 760px;
+    }
+
+    .gp-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(56,189,248,.12);
+      border: 1px solid rgba(56,189,248,.24);
+      color: #bae6fd;
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .gp-grid {
+      display: grid;
+      grid-template-columns: 1.25fr .95fr;
+      gap: 18px;
+    }
+
+    .gp-card {
+      background: rgba(17,24,39,.9);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 18px;
+    }
+
+    .gp-card h2 {
+      margin: 0 0 14px;
+      font-size: 18px;
+      line-height: 1.2;
+    }
+
+    .scenario-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .scenario-item {
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+    }
+
+    .scenario-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .scenario-name {
+      font-weight: 600;
+      font-size: 15px;
+    }
+
+    .scenario-score {
+      font-size: 14px;
+      color: #e2e8f0;
+    }
+
+    .bar {
+      width: 100%;
+      height: 10px;
+      background: #0b1220;
+      border-radius: 999px;
+      overflow: hidden;
+      border: 1px solid rgba(148,163,184,.18);
+    }
+
+    .bar > span {
+      display: block;
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #38bdf8, #22c55e);
+    }
+
+    .scenario-desc {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .signal-table {
+      display: grid;
+      gap: 10px;
+    }
+
+    .signal-row {
+      display: grid;
+      grid-template-columns: 1.2fr .9fr .8fr;
+      gap: 10px;
+      align-items: start;
+      padding: 12px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+    }
+
+    .signal-name {
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .signal-reading {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.4;
+      margin-top: 4px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 100px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid transparent;
+    }
+
+    .pill.escalatory { background: rgba(239,68,68,.12); color: #fecaca; border-color: rgba(239,68,68,.22); }
+    .pill.neutral { background: rgba(148,163,184,.12); color: #cbd5e1; border-color: rgba(148,163,184,.22); }
+    .pill.deescalatory { background: rgba(34,197,94,.12); color: #bbf7d0; border-color: rgba(34,197,94,.22); }
+
+    .confidence {
+      color: #e2e8f0;
+      font-size: 13px;
+      text-align: right;
+    }
+
+    .narrative {
+      color: #dbeafe;
+      line-height: 1.6;
+      font-size: 14px;
+      background: rgba(56,189,248,.08);
+      border: 1px solid rgba(56,189,248,.18);
+      border-radius: 14px;
+      padding: 14px;
+    }
+
+    .sources {
+      display: grid;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .source-link {
+      display: block;
+      color: #bae6fd;
+      text-decoration: none;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
+      background: rgba(15,23,42,.65);
+      font-size: 13px;
+    }
+
+    .source-link:hover { border-color: rgba(56,189,248,.4); }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin: 18px 0 0;
+    }
+
+    .btn {
+      appearance: none;
+      border: 0;
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #082f49;
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--line);
+    }
+
+    .footer-note {
+      margin-top: 16px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .loader, .error {
+      border-radius: 14px;
+      padding: 14px;
+      margin-top: 16px;
+      font-size: 14px;
+    }
+
+    .loader { background: rgba(148,163,184,.12); color: #e2e8f0; }
+    .error { background: rgba(239,68,68,.12); color: #fecaca; border: 1px solid rgba(239,68,68,.24); }
+
+    @media (max-width: 860px) {
+      .gp-grid { grid-template-columns: 1fr; }
+      .signal-row { grid-template-columns: 1fr; }
+      .confidence { text-align: left; }
+    }
+  </style>
+</head>
+<body>
+  <div class="gp-widget" id="gpWidget">
+    <div class="gp-header">
+      <div>
+        <h1 class="gp-title">Iran Scenario Tracker</h1>
+        <p class="gp-subtitle">
+          AI scans selected sources, extracts tracked signals, and estimates which geopolitical scenario is most likely right now.
+        </p>
+      </div>
+      <div class="gp-status" id="lastUpdated">Loading latest assessment...</div>
+    </div>
+
+    <div class="gp-grid">
+      <section class="gp-card">
+        <h2>Scenario likelihoods</h2>
+        <div class="scenario-list" id="scenarioList"></div>
+      </section>
+
+      <section class="gp-card">
+        <h2>Analyst summary</h2>
+        <div class="narrative" id="narrative"></div>
+        <div class="controls">
+          <button class="btn btn-primary" id="refreshBtn">Refresh analysis</button>
+          <button class="btn btn-secondary" id="toggleSourcesBtn">Show sources</button>
+        </div>
+        <div class="sources" id="sources" style="display:none"></div>
+        <div class="footer-note">
+          Demo output only. Use analyst review for high-stakes decisions.
+        </div>
+      </section>
+    </div>
+
+    <section class="gp-card" style="margin-top:18px;">
+      <h2>Tracked signals</h2>
+      <div class="signal-table" id="signalTable"></div>
+      <div id="stateMessage" class="loader" style="display:none"></div>
+      <div id="errorMessage" class="error" style="display:none"></div>
+    </section>
+  </div>
+
+  <script>
+    const API_URL = window.HM_SCENARIO_API_URL || "https://future-scenario-predictor.vercel.app/api/scenario-assessment?topic=iran";
+
+    const fallbackData = {
+      topic: "Iran",
+      updated_at: new Date().toISOString(),
+      summary: "Current signals lean toward a high-conflict regional escalation scenario. Oil and troop signals are elevated, diplomacy is weak, and there is limited evidence in this demo snapshot of outright state collapse.",
+      scenarios: [
+        {
+          name: "Burning Strait",
+          score: 47,
+          description: "Full regional war with regime continuity in Iran."
+        },
+        {
+          name: "Chaos + Collapse",
+          score: 27,
+          description: "Multi-state war with severe internal dysfunction inside Iran."
+        },
+        {
+          name: "Shattered Diplomacy",
+          score: 16,
+          description: "Fragmented post-Iran political landscape with weak successor actors."
+        },
+        {
+          name: "Cold Containment",
+          score: 10,
+          description: "Managed escalation, low troop involvement, and limited spillover."
+        }
+      ],
+      signals: [
+        {
+          name: "Oil prices",
+          reading: "Elevated and volatile relative to baseline",
+          direction: "escalatory",
+          confidence: "High"
+        },
+        {
+          name: "Troop deployment",
+          reading: "Increased military presence and readiness signals",
+          direction: "escalatory",
+          confidence: "Medium"
+        },
+        {
+          name: "Government stability",
+          reading: "No clear proof of state collapse in current demo snapshot",
+          direction: "neutral",
+          confidence: "Medium"
+        },
+        {
+          name: "Diplomacy / ceasefire",
+          reading: "Weak momentum toward de-escalation",
+          direction: "escalatory",
+          confidence: "Medium"
+        },
+        {
+          name: "Maritime disruption",
+          reading: "Strait-related risk remains elevated",
+          direction: "escalatory",
+          confidence: "High"
+        }
+      ],
+      sources: [
+        { title: "BBC World", url: "#" },
+        { title: "World Monitor", url: "#" },
+        { title: "Selected social feed", url: "#" }
+      ]
+    };
+
+    const scenarioList = document.getElementById("scenarioList");
+    const signalTable = document.getElementById("signalTable");
+    const narrative = document.getElementById("narrative");
+    const lastUpdated = document.getElementById("lastUpdated");
+    const sources = document.getElementById("sources");
+    const stateMessage = document.getElementById("stateMessage");
+    const errorMessage = document.getElementById("errorMessage");
+    const refreshBtn = document.getElementById("refreshBtn");
+    const toggleSourcesBtn = document.getElementById("toggleSourcesBtn");
+
+    function formatRelative(dateString) {
+      const date = new Date(dateString);
+      const mins = Math.max(1, Math.round((Date.now() - date.getTime()) / 60000));
+      if (mins < 60) return `${mins} min ago`;
+      const hours = Math.round(mins / 60);
+      if (hours < 24) return `${hours} hr ago`;
+      const days = Math.round(hours / 24);
+      return `${days} day${days === 1 ? "" : "s"} ago`;
+    }
+
+    function render(data) {
+      scenarioList.innerHTML = data.scenarios.map(item => `
+        <div class="scenario-item">
+          <div class="scenario-top">
+            <div class="scenario-name">${item.name}</div>
+            <div class="scenario-score">${item.score}%</div>
+          </div>
+          <div class="bar"><span style="width:${Math.max(0, Math.min(100, item.score))}%"></span></div>
+          <div class="scenario-desc">${item.description}</div>
+        </div>
+      `).join("");
+
+      signalTable.innerHTML = data.signals.map(signal => `
+        <div class="signal-row">
+          <div>
+            <div class="signal-name">${signal.name}</div>
+            <div class="signal-reading">${signal.reading}</div>
+          </div>
+          <div><span class="pill ${signal.direction}">${signal.direction}</span></div>
+          <div class="confidence">Confidence: ${signal.confidence}</div>
+        </div>
+      `).join("");
+
+      narrative.textContent = data.summary;
+      lastUpdated.textContent = `Updated ${formatRelative(data.updated_at)}`;
+
+      sources.innerHTML = (data.sources || []).map(source => `
+        <a class="source-link" href="${source.url}" target="_blank" rel="noopener noreferrer">${source.title}</a>
+      `).join("");
+    }
+
+    async function loadAssessment() {
+      errorMessage.style.display = "none";
+      stateMessage.style.display = "block";
+      stateMessage.textContent = "Refreshing latest signals and scenario scores...";
+
+      try {
+        const res = await fetch(API_URL, {
+          method: "GET",
+          headers: { "Accept": "application/json" }
+        });
+
+        if (!res.ok) throw new Error(`Request failed with status ${res.status}`);
+        const data = await res.json();
+        render(data);
+        stateMessage.style.display = "none";
+      } catch (err) {
+        render(fallbackData);
+        stateMessage.style.display = "none";
+        errorMessage.style.display = "block";
+        errorMessage.textContent = `Live API unavailable, showing fallback demo data. ${err.message}`;
+      }
+    }
+
+    refreshBtn.addEventListener("click", loadAssessment);
+    toggleSourcesBtn.addEventListener("click", () => {
+      const isHidden = sources.style.display === "none";
+      sources.style.display = isHidden ? "grid" : "none";
+      toggleSourcesBtn.textContent = isHidden ? "Hide sources" : "Show sources";
+    });
+
+    loadAssessment();
+  </script>
+</body>
+</html>

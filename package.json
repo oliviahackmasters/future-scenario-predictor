@@ -1,0 +1,19 @@
+{
+  "name": "future-scenario-predictor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vercel dev",
+    "start": "node scenario-assessment-api.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "openai": "^5.20.0",
+    "rss-parser": "^3.13.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

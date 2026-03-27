@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/scenario-assessment.js": {
+      "maxDuration": 60
+    }
+  }
+}
