@@ -105,7 +105,17 @@ const TOPICS = {
       "command",
       "factions",
       "shipping",
-      "sanctions"
+      "sanctions",
+      "strike",
+      "drone",
+      "attack",
+      "naval",
+      "seizure",
+      "port",
+      "explosion",
+      "power plant",
+      "tankers",
+      "kharg"
     ],
     polymarketSearchTerms: [
       "iran",
@@ -132,7 +142,7 @@ function json(res, status, body) {
   res.send(JSON.stringify(body));
 }
 
-function scoreAndSort(items) {
+function scoreAndSort(items, savedSourceNames = []) {
   return items
     .map((item) => {
       const haystack = `${item.title} ${item.contentSnippet} ${item.content}`.toLowerCase();
@@ -140,10 +150,13 @@ function scoreAndSort(items) {
       for (const keyword of item.keywords || []) {
         if (haystack.includes(keyword)) matches += 1;
       }
-      return { ...item, _matches: matches };
+
+      const savedBoost = savedSourceNames.includes(item.source) ? 0.75 : 0;
+
+      return { ...item, _matches: matches, _score: matches + savedBoost };
     })
     .filter((item) => item._matches > 0)
-    .sort((a, b) => b._matches - a._matches || (b.isoDate || "").localeCompare(a.isoDate || ""));
+    .sort((a, b) => b._score - a._score || (b.isoDate || "").localeCompare(a.isoDate || ""));
 }
 
 async function fetchJson(url, init = {}) {
@@ -158,6 +171,12 @@ async function fetchRssItems(source, keywordFilter) {
   try {
     const feed = await parser.parseURL(source.url);
     const items = Array.isArray(feed.items) ? feed.items : [];
+    console.log(`RAW FEED ITEMS FOR ${source.name}:`, items.slice(0, 3).map((item) => ({
+      title: item.title,
+      link: item.link,
+      isoDate: item.isoDate || item.pubDate,
+      snippet: (item.contentSnippet || item.summary || item.content || "").slice(0, 120)
+    })));
     return items.slice(0, 6).map((item) => ({
       source: source.name,
       url: item.link || source.url,
@@ -181,7 +200,6 @@ async function collectTopicCoverage(topicConfig, savedSources = []) {
 
   const allSources = [...defaultSources, ...extraSources];
 
-  // de-dupe by normalized URL
   const uniqueSources = Array.from(
     new Map(
       allSources.map((source) => [
@@ -227,7 +245,19 @@ async function collectTopicCoverage(topicConfig, savedSources = []) {
     }, {})
   );
 
-  const filtered = scoreAndSort(flattened).slice(0, 8);
+  const scored = scoreAndSort(flattened, savedSourceNames);
+
+  console.log(
+    "TOP 20 SCORED SOURCES:",
+    scored.slice(0, 20).map((item) => ({
+      source: item.source,
+      title: item.title,
+      matches: item._matches
+    }))
+  );
+
+  const savedSourceNames = extraSources.map((s) => s.name);
+  const filtered = ensureSavedSourcePresence(scored, savedSourceNames, 8);
 
   console.log("FINAL FILTERED SOURCES:", filtered.map((item) => item.source));
 
@@ -834,3 +864,27 @@ return json(res, 200, {
 }
 
 
+function ensureSavedSourcePresence(scoredItems, savedSourceNames = [], maxTotal = 8) {
+  const result = [];
+  const usedTitles = new Set();
+
+  for (const sourceName of savedSourceNames) {
+    const match = scoredItems.find(
+      (item) => item.source === sourceName && !usedTitles.has(item.title)
+    );
+    if (match) {
+      result.push(match);
+      usedTitles.add(match.title);
+    }
+  }
+
+  for (const item of scoredItems) {
+    if (result.length >= maxTotal) break;
+    if (!usedTitles.has(item.title)) {
+      result.push(item);
+      usedTitles.add(item.title);
+    }
+  }
+
+  return result.slice(0, maxTotal);
+}
