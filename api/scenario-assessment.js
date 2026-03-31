@@ -245,6 +245,8 @@ async function collectTopicCoverage(topicConfig, savedSources = []) {
     }, {})
   );
 
+  const savedSourceNames = extraSources.map((s) => s.name);
+
   const scored = scoreAndSort(flattened, savedSourceNames);
 
   console.log(
@@ -256,7 +258,6 @@ async function collectTopicCoverage(topicConfig, savedSources = []) {
     }))
   );
 
-  const savedSourceNames = extraSources.map((s) => s.name);
   const filtered = ensureSavedSourcePresence(scored, savedSourceNames, 8);
 
   console.log("FINAL FILTERED SOURCES:", filtered.map((item) => item.source));
