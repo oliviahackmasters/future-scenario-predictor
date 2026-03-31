@@ -174,21 +174,43 @@ async function fetchRssItems(source, keywordFilter) {
 }
 
 async function collectTopicCoverage(topicConfig, savedSources = []) {
-  const allSources = [
-    ...topicConfig.sources,
-    ...savedSources.filter((s) => s.enabled !== false)
-  ];
+  const defaultSources = Array.isArray(topicConfig.sources) ? topicConfig.sources : [];
+  const extraSources = Array.isArray(savedSources)
+    ? savedSources.filter((s) => s.enabled !== false)
+    : [];
 
+  const allSources = [...defaultSources, ...extraSources];
+
+  // de-dupe by normalized URL
   const uniqueSources = Array.from(
-    new Map(allSources.map((source) => [source.url, source])).values()
+    new Map(
+      allSources.map((source) => [
+        String(source.url || "").trim().toLowerCase(),
+        {
+          name: source.name,
+          url: source.url,
+          type: source.type || "rss",
+          enabled: source.enabled !== false
+        }
+      ])
+    ).values()
+  ).filter((source) => source.url);
+
+  const rssSources = uniqueSources.filter(
+    (source) => String(source.type || "rss").toLowerCase() === "rss"
   );
 
-  const rssSources = uniqueSources.filter((source) => source.type === "rss" || !source.type);
-
-  console.log("RSS SOURCES USED:", rssSources.map(s => ({
+  console.log("DEFAULT SOURCES:", defaultSources.map((s) => s.name));
+  console.log("SAVED SOURCES:", extraSources.map((s) => ({
     name: s.name,
     url: s.url,
-    type: s.type || "rss"
+    type: s.type,
+    enabled: s.enabled
+  })));
+  console.log("RSS SOURCES USED:", rssSources.map((s) => ({
+    name: s.name,
+    url: s.url,
+    type: s.type
   })));
 
   const itemGroups = await Promise.all(
@@ -207,10 +229,7 @@ async function collectTopicCoverage(topicConfig, savedSources = []) {
 
   const filtered = scoreAndSort(flattened).slice(0, 8);
 
-  console.log(
-    "FINAL FILTERED SOURCES:",
-    filtered.map(item => item.source)
-  );
+  console.log("FINAL FILTERED SOURCES:", filtered.map((item) => item.source));
 
   return filtered.map((item) => ({
     source: item.source,
@@ -767,9 +786,10 @@ export default async function handler(req, res) {
   }
 
   try {
-    const topicConfig = getTopicConfig(req.query.topic);
+    const topic = req.query.topic || "iran";
+const topicConfig = getTopicConfig(topic);
 
-    const savedSources = await getMergedSavedSources(req.query.topic || "iran");
+const savedSources = await getMergedSavedSources(topic);
 
 const [articles, oilSignal, polymarketSignal] = await Promise.all([
   collectTopicCoverage(topicConfig, savedSources),
@@ -803,6 +823,7 @@ return json(res, 200, {
     saved_sources: savedSources
   }
 });
+
   } catch (error) {
     console.error("Scenario assessment failed:", error);
     return json(res, 500, {

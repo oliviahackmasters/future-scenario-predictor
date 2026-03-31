@@ -23,7 +23,7 @@ function parseBody(req) {
 }
 
 export default async function handler(req, res) {
-  const topic = req.query.topic || "global";
+  const topic = req.query.topic || "iran";
 
   if (req.method === "OPTIONS") {
     return json(res, 200, { ok: true });

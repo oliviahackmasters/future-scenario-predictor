@@ -1118,6 +1118,7 @@ async function addSource() {
   sourceTypeInput.value = "rss";
 
   await loadSavedSources();
+  await loadAssessment();
 }
 
 savedSourcesEl.addEventListener("click", async (event) => {
@@ -1127,17 +1128,18 @@ savedSourcesEl.addEventListener("click", async (event) => {
   const action = btn.dataset.action;
   const id = btn.dataset.id;
 
-  if (action === "delete") {
-    await fetch(SOURCES_API_URL, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id })
-    });
-    await loadSavedSources();
-    return;
-  }
+if (action === "delete") {
+  await fetch(SOURCES_API_URL, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id })
+  });
+  await loadSavedSources();
+  await loadAssessment();
+  return;
+}
 
-  if (action === "toggle") {
+if (action === "toggle") {
   const currentRow = btn.closest(".hm-saved-source");
   const isDisabled = currentRow?.dataset.enabled === "false";
 
@@ -1148,6 +1150,7 @@ savedSourcesEl.addEventListener("click", async (event) => {
   });
 
   await loadSavedSources();
+  await loadAssessment();
 }
 });
 
