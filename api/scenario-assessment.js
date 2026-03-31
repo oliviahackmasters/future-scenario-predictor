@@ -821,6 +821,8 @@ export default async function handler(req, res) {
 const topicConfig = getTopicConfig(topic);
 
 const savedSources = await getMergedSavedSources(topic);
+console.log("TOPIC:", topic);
+console.log("SAVED SOURCES LOADED:", savedSources);
 
 const [articles, oilSignal, polymarketSignal] = await Promise.all([
   collectTopicCoverage(topicConfig, savedSources),
@@ -845,14 +847,15 @@ return json(res, 200, {
     })),
     { title: "Polymarket live markets", url: "https://polymarket.com/" }
   ],
-  meta: {
-    oil: oilSignal,
-    polymarket: {
-      source: polymarketSignal.source,
-      matchedMarkets: polymarketSignal.matchedMarkets
-    },
-    saved_sources: savedSources
-  }
+    meta: {
+      oil: oilSignal,
+      polymarket: {
+        source: polymarketSignal.source,
+        matchedMarkets: polymarketSignal.matchedMarkets
+      },
+      saved_sources: savedSources,
+      used_article_sources: [...new Set(articles.map((a) => a.source))]
+    }
 });
 
   } catch (error) {
