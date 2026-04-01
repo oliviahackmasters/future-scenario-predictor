@@ -50,7 +50,11 @@ export default async function handler(req, res) {
           name: body.name,
           url: body.url,
           type: body.type || "rss",
-          enabled: body.enabled !== false
+          enabled: body.enabled !== false,
+          homepage: body.homepage || "",
+          confidence: Number(body.confidence || 0),
+          discovered_by: body.discovered_by || "manual",
+          validated_at: body.validated_at || null
         },
         topic
       );
@@ -71,7 +75,11 @@ export default async function handler(req, res) {
           name: body.name,
           url: body.url,
           type: body.type,
-          enabled: body.enabled
+          enabled: body.enabled,
+          homepage: body.homepage,
+          confidence: body.confidence,
+          discovered_by: body.discovered_by,
+          validated_at: body.validated_at
         },
         topic
       );
