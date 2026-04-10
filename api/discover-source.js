@@ -86,7 +86,7 @@ export default async function handler(req, res) {
     }
 
     // Handle direct RSS URL (website field used as RSS URL)
-    if (name && website && (website.includes('rss') || website.includes('feed') || website.includes('.xml') || website.includes('feeds.'))) {
+    if (website && (website.includes('rss') || website.includes('feed') || website.includes('.xml') || website.includes('feeds.'))) {
       const validated = await validateKnownFeed(website);
       if (!validated.ok) {
         return json(req, res, 422, {
@@ -101,7 +101,7 @@ export default async function handler(req, res) {
         method: "direct_rss",
         topic,
         source: {
-          name,
+          name: name || validated.source.feedTitle || website,
           url: validated.source.feedUrl,
           type: "rss",
           enabled: true,
@@ -118,7 +118,7 @@ export default async function handler(req, res) {
     }
 
     // Fallback: try to validate website as direct RSS URL if it looks like a URL
-    if (name && website && (website.startsWith('http://') || website.startsWith('https://'))) {
+    if (website && (website.startsWith('http://') || website.startsWith('https://'))) {
       const validated = await validateKnownFeed(website);
       if (validated.ok) {
         return json(req, res, 200, {
@@ -126,7 +126,7 @@ export default async function handler(req, res) {
           method: "direct_url",
           topic,
           source: {
-            name,
+            name: name || validated.source.feedTitle || website,
             url: validated.source.feedUrl,
             type: "rss",
             enabled: true,
