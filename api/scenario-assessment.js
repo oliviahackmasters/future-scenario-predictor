@@ -174,8 +174,9 @@ async function fetchText(url, init = {}, timeoutMs = RSS_FETCH_TIMEOUT_MS) {
     const res = await fetch(url, {
       ...init,
       signal,
+      redirect: "follow",
       headers: {
-        "User-Agent": "future-scenario-predictor/1.0",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36 future-scenario-predictor/1.0",
         Accept: "application/rss+xml, application/xml, text/xml, application/atom+xml, text/plain, */*",
         ...(init.headers || {})
       }
