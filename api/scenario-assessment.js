@@ -278,8 +278,8 @@ function scoreAndSort(items, savedSourceNames = []) {
 
       return { ...item, _matches: matches, _score: score };
     })
-    .filter((item) => item._matches >= MIN_MATCHES_REQUIRED)
-    .filter(isStrongIranMatch)
+    .filter((item) => item._matches >= MIN_MATCHES_REQUIRED || savedSourceNames.includes(item.source))
+    .filter((item) => isStrongIranMatch(item) || savedSourceNames.includes(item.source))
     .sort((a, b) => b._score - a._score || (b.isoDate || "").localeCompare(a.isoDate || ""));
 }
 
