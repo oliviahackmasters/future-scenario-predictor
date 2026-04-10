@@ -664,6 +664,7 @@ function buildPrompt(topicConfig, articles, externalSignals) {
     `Assess the current geopolitical outlook for ${topicConfig.label}.`,
     "Use only supplied evidence.",
     "Return valid JSON only.",
+    "Keep output concise.",
     "Use exactly these scenario names:",
     JSON.stringify(topicConfig.scenarios.map((s) => s.name)),
     "Tracked signals:",
@@ -677,6 +678,13 @@ function buildPrompt(topicConfig, articles, externalSignals) {
         scenarioSignals: s.scenarioSignals
       }))
     ),
+    "For calculation.scenarios, include only:",
+    "- name",
+    "- ai_score",
+    "- market_boost",
+    "- final_score",
+    "- reasoning",
+    'Set reasoning to one short sentence only.',
     "Articles:",
     JSON.stringify(compactArticles),
     "External signals:",
@@ -751,32 +759,7 @@ const responseSchema = {
               ai_score: { type: "number" },
               market_boost: { type: "number" },
               final_score: { type: "number" },
-              reasoning: {
-                type: "array",
-                items: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    signal: { type: "string" },
-                    effect: { type: "string" },
-                    weight: { type: "string" },
-                    sources: {
-                      type: "array",
-                      items: {
-                        type: "object",
-                        additionalProperties: false,
-                        properties: {
-                          title: { type: "string" },
-                          url: { type: "string" },
-                          source: { type: "string" }
-                        },
-                        required: ["title", "url", "source"]
-                      }
-                    }
-                  },
-                  required: ["signal", "effect", "weight", "sources"]
-                }
-              }
+              reasoning: { type: "string" }
             },
             required: ["name", "ai_score", "market_boost", "final_score", "reasoning"]
           }
@@ -941,7 +924,7 @@ function buildFallbackAssessment(topicConfig, articles, externalSignals, summary
           ai_score: 0,
           market_boost: Number(polymarket?.weights?.[scenario.name] || 0) * 20,
           final_score: Number(finalScenario?.score || 0),
-          reasoning: []
+          reasoning: "Fallback assessment used due to model failure or truncation."
         };
       })
     }
@@ -949,7 +932,7 @@ function buildFallbackAssessment(topicConfig, articles, externalSignals, summary
 }
 
 async function generateScenarioAssessment(topicConfig, articles, externalSignals) {
-  if (!articles.length && !externalSignals.length) {
+    if (!articles.length && !externalSignals.length) {
     return {
       summary: "Not enough current source material was available to generate a live assessment.",
       scenarios: topicConfig.scenarios.map((scenario) => ({
@@ -969,7 +952,7 @@ async function generateScenarioAssessment(topicConfig, articles, externalSignals
           ai_score: 0,
           market_boost: 0,
           final_score: 25,
-          reasoning: []
+          reasoning: "No live evidence available."
         }))
       }
     };
@@ -1002,7 +985,9 @@ async function generateScenarioAssessment(topicConfig, articles, externalSignals
             ]
           }
         ],
-        max_output_tokens: 1600,
+        temperature: 0.2,
+        max_output_tokens: 1100,
+        
         text: {
           format: {
             type: "json_schema",
@@ -1054,7 +1039,7 @@ async function generateScenarioAssessment(topicConfig, articles, externalSignals
     polymarket?.weights || {}
   );
 
-  const calculationScenarios = topicConfig.scenarios.map((scenario) => {
+    const calculationScenarios = topicConfig.scenarios.map((scenario) => {
     const rawCalc = (parsed.calculation?.scenarios || []).find(
       (item) => String(item.name || "").trim().toLowerCase() === scenario.name.toLowerCase()
     );
@@ -1070,7 +1055,10 @@ async function generateScenarioAssessment(topicConfig, articles, externalSignals
         rawCalc?.market_boost || Number(polymarket?.weights?.[scenario.name] || 0) * 20
       ),
       final_score: Number(normalized?.score || 0),
-      reasoning: Array.isArray(rawCalc?.reasoning) ? rawCalc.reasoning : []
+      reasoning:
+        typeof rawCalc?.reasoning === "string" && rawCalc.reasoning.trim()
+          ? rawCalc.reasoning.trim()
+          : "No short reasoning returned."
     };
   });
 
