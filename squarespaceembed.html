@@ -753,7 +753,7 @@
   <input
     class="hm-source-input"
     id="hmSourceWebsite"
-    placeholder="Optional website URL, e.g. https://www.reuters.com/world/"
+    placeholder="Website URL or RSS feed URL, e.g. https://feeds.reuters.com/reuters/worldNews"
   />
   <button class="hm-btn" id="hmAddSourceBtn">Find source</button>
 </div>
@@ -1048,7 +1048,7 @@ async function hmDiscoverAndAddSource() {
   const website = String(sourceWebsiteInput.value || "").trim();
 
   if (!name && !website) {
-    sourceDiscoveryStatus.textContent = "Enter a source name or a website URL.";
+    sourceDiscoveryStatus.textContent = "Enter a source name and website/RSS URL.";
     return;
   }
 

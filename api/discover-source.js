@@ -51,6 +51,65 @@ export default async function handler(req, res) {
     const topic = String(req.query.topic || body.topic || "iran").trim();
     const name = String(body.name || "").trim();
     const website = String(body.website || "").trim();
+    const url = String(body.url || "").trim();
+
+    // Handle custom source: name + url provided directly
+    if (name && url) {
+      const validated = await validateKnownFeed(url);
+      if (!validated.ok) {
+        return json(req, res, 422, {
+          ok: false,
+          error: "custom_feed_invalid",
+          message: `The provided URL is not a valid RSS feed: ${validated.error}`
+        });
+      }
+
+      return json(req, res, 200, {
+        ok: true,
+        method: "custom",
+        topic,
+        source: {
+          name,
+          url: validated.source.feedUrl,
+          type: "rss",
+          enabled: true,
+          homepage: "",
+          confidence: 0.9,
+          discovered_by: "custom",
+          validated_at: new Date().toISOString()
+        },
+        validation: {
+          feed_title: validated.source.feedTitle,
+          item_count: validated.source.itemCount
+        }
+      });
+    }
+
+    // Handle direct RSS URL (website field used as RSS URL)
+    if (name && website && (website.includes('rss') || website.includes('feed') || website.includes('.xml'))) {
+      const validated = await validateKnownFeed(website);
+      if (validated.ok) {
+        return json(req, res, 200, {
+          ok: true,
+          method: "direct_rss",
+          topic,
+          source: {
+            name,
+            url: validated.source.feedUrl,
+            type: "rss",
+            enabled: true,
+            homepage: "",
+            confidence: 0.9,
+            discovered_by: "direct_rss",
+            validated_at: new Date().toISOString()
+          },
+          validation: {
+            feed_title: validated.source.feedTitle,
+            item_count: validated.source.itemCount
+          }
+        });
+      }
+    }
 
     const matched = name ? findCatalogSourceByName(name) : null;
 
@@ -147,7 +206,7 @@ export default async function handler(req, res) {
     return json(req, res, 422, {
       ok: false,
       error: "not_found",
-      message: "Could not find that source by name. Try adding the website URL."
+      message: "Could not find that source by name. Try adding both a name and URL for a custom source, or provide a website URL to discover from."
     });
   } catch (error) {
     return json(req, res, 500, {
