@@ -1,92 +1,66 @@
 import Parser from "rss-parser";
 import OpenAI from "openai";
-import fs from "fs/promises";
-import path from "path";
-import url, { fileURLToPath } from "url";
+import { kv } from "@vercel/kv";
 import { getMergedSavedSources } from "../lib/source-store.js";
 import { discoverFeedFromWebsite } from "../lib/feed-discovery.js";
 
 const parser = new Parser();
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const HISTORY_DIR = path.join(__dirname, "../data");
-const HISTORY_FILE = path.join(HISTORY_DIR, "assessment-history.json");
+function getHistoryKey(topic) {
+  return `scenario-history:${String(topic || "iran").toLowerCase()}`;
+}
 
 async function loadAssessmentHistory(topic) {
   try {
-    const contents = await fs.readFile(HISTORY_FILE, "utf8");
-    const parsed = JSON.parse(contents || "{}");
-    const history = Array.isArray(parsed[topic]) ? parsed[topic] : [];
-    return history;
+    const key = getHistoryKey(topic);
+    const history = await kv.get(key);
+
+    if (!Array.isArray(history)) return [];
+
+    return history
+      .filter((item) => item && item.date && Array.isArray(item.scenario_scores))
+      .sort((a, b) => String(a.date).localeCompare(String(b.date)));
   } catch (error) {
-    if (error.code === "ENOENT") return [];
-    console.error("Failed to load assessment history:", error.message);
+    console.error("Failed to load assessment history from KV:", error.message);
     return [];
   }
 }
 
 async function saveAssessmentHistory(topic, entry) {
-  await fs.mkdir(HISTORY_DIR, { recursive: true });
-  let contents = {};
-
   try {
-    const raw = await fs.readFile(HISTORY_FILE, "utf8");
-    contents = JSON.parse(raw || "{}") || {};
-  } catch (error) {
-    if (error.code !== "ENOENT") {
-      console.error("Failed to read assessment history file:", error.message);
-    }
-  }
+    const key = getHistoryKey(topic);
+    const existing = await loadAssessmentHistory(topic);
 
-  const topicHistory = Array.isArray(contents[topic]) ? contents[topic] : [];
-  const entryDate = String(entry.date || new Date().toISOString().slice(0, 10));
-  const existingIndex = topicHistory.findIndex((item) => item.date === entryDate);
-
-  const mergedEntry = {
-    ...entry,
-    date: entryDate,
-    updated_at: entry.updated_at || new Date().toISOString()
-  };
-
-  if (existingIndex >= 0) {
-    topicHistory[existingIndex] = {
-      ...topicHistory[existingIndex],
-      ...mergedEntry
+    const entryDate = String(entry.date || new Date().toISOString().slice(0, 10));
+    const mergedEntry = {
+      ...entry,
+      date: entryDate,
+      updated_at: entry.updated_at || new Date().toISOString()
     };
-  } else {
-    topicHistory.push(mergedEntry);
+
+    const index = existing.findIndex((item) => item.date === entryDate);
+
+    if (index >= 0) {
+      existing[index] = {
+        ...existing[index],
+        ...mergedEntry
+      };
+    } else {
+      existing.push(mergedEntry);
+    }
+
+    existing.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+
+    await kv.set(key, existing);
+
+    return existing;
+  } catch (error) {
+    console.error("Failed to save assessment history to KV:", error.message);
+    throw error;
   }
-
-  topicHistory.sort((a, b) => String(a.date).localeCompare(String(b.date)));
-  contents[topic] = topicHistory;
-
-  await fs.writeFile(HISTORY_FILE, JSON.stringify(contents, null, 2), "utf8");
-  return topicHistory;
 }
 
-// Monkey-patch url.parse to use WHATWG URL API to avoid deprecation warning
-const originalParse = url.parse;
-url.parse = function(urlString, parseQueryString = false, slashesDenoteHost = false) {
-  try {
-    const u = new URL(urlString);
-    const result = {
-      protocol: u.protocol,
-      host: u.host,
-      hostname: u.hostname,
-      port: u.port,
-      pathname: u.pathname,
-      search: u.search,
-      hash: u.hash,
-      href: u.href,
-      path: u.pathname + u.search,
-      query: parseQueryString ? Object.fromEntries(u.searchParams) : u.search.slice(1)
-    };
-    return result;
-  } catch (e) {
-    // Fallback to original for invalid URLs
-    return originalParse(urlString, parseQueryString, slashesDenoteHost);
-  }
-};
+
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -452,23 +426,29 @@ async function collectTopicCoverage(topicConfig, savedSources = []) {
 
   const allSources = [...defaultSources, ...extraSources];
 
-  const uniqueSources = Array.from(
-    new Map(
-      allSources.map((source) => [
-        String(source.url || "").trim().toLowerCase(),
+const uniqueSources = Array.from(
+  new Map(
+    allSources.map((source) => {
+      const normalizedUrl = normalizeSourceUrl(source.url);
+      return [
+        normalizedUrl,
         {
           name: source.name,
-          url: source.url,
+          url: normalizedUrl,
           type: source.type || "rss",
-          enabled: source.enabled !== false
+          enabled: source.enabled !== false,
+          homepage: source.homepage || ""
         }
-      ])
-    ).values()
-  ).filter((source) => source.url);
+      ];
+    })
+  ).values()
+).filter((source) => source.url);
 
-  const rssSources = uniqueSources.filter(
-    (source) => String(source.type || "rss").toLowerCase() === "rss"
-  );
+const rssSources = uniqueSources.filter(
+  (source) =>
+    String(source.type || "rss").toLowerCase() === "rss" &&
+    !isBlockedOrBrokenSource(source)
+);
 
   console.log("DEFAULT SOURCES:", defaultSources.map((s) => s.name));
   console.log(
@@ -877,6 +857,34 @@ const responseSchema = {
   required: ["summary", "scenarios", "signals", "calculation"]
 };
 
+function normalizeSourceUrl(raw) {
+  const input = String(raw || "").trim();
+  if (!input) return "";
+
+  try {
+    const parsed = new URL(input);
+    parsed.protocol = "https:";
+    parsed.hash = "";
+    return parsed.toString().replace(/\/$/, "");
+  } catch {
+    return input.toLowerCase().replace(/\/$/, "");
+  }
+}
+
+function isBlockedOrBrokenSource(source) {
+  const url = String(source?.url || "").toLowerCase();
+
+  if (!url) return true;
+
+  if (url.includes("reddit.com")) return true;
+  if (url.includes("acleddata.com/blog/feed")) return true;
+  if (url.includes("understandingwar.org/rss.xml")) return true;
+  if (url.includes("criticalthreats.org/feeds/iran-updates")) return true;
+  if (url.includes("feeds.reuters.com")) return true;
+
+  return false;
+}
+
 function normalizeScenarioScores(output, scenariosFromConfig, polymarketWeights = {}) {
   const byName = new Map(
     output.scenarios.map((item) => [String(item.name || "").trim().toLowerCase(), item])
@@ -1198,6 +1206,12 @@ export default async function handler(req, res) {
       message: "OPENAI_API_KEY is not set."
     });
   }
+  if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
+  return json(res, 500, {
+    error: "missing_kv_config",
+    message: "KV_REST_API_URL or KV_REST_API_TOKEN is not set."
+  });
+}
 
     try {
     const totalTimer = startTimer("scenario-assessment-total");
@@ -1235,7 +1249,8 @@ export default async function handler(req, res) {
     const assessment = await generateScenarioAssessment(topicConfig, articles, externalSignals);
     endTimer(assessmentTimer);
 
-const nowIso = new Date().toISOString();
+
+    const nowIso = new Date().toISOString();
 const today = nowIso.slice(0, 10);
 const topArticle = articles[0] || null;
 
@@ -1287,7 +1302,7 @@ const historyEntry = {
       scenarios: assessment.scenarios,
       signals: assessment.signals,
       calculation: assessment.calculation,
-      history: Array.isArray(history) ? history.slice(-14) : [],
+      history: Array.isArray(history) ? history.slice(-30) : [],
       sources: [
         ...articles.map((article) => ({
           title: `${article.source}: ${article.title}`,
