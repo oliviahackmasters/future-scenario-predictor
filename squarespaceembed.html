@@ -627,6 +627,32 @@
   color:var(--hm-copper);
 }
 
+#hmScenarioPlotter .hm-built-in-sources {
+  margin-top: 20px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  padding-top: 16px;
+}
+
+#hmScenarioPlotter .hm-built-in-sources .hm-builtin-controls {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+#hmScenarioPlotter .hm-built-in-sources .hm-built-in-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0;
+  font-size: 13px;
+}
+
+#hmScenarioPlotter .hm-built-in-sources .hm-built-in-item a {
+  color: rgba(255,255,255,0.85);
+  text-decoration: underline;
+}
+
 @media (max-width: 900px){
   #hmScenarioPlotter .hm-source-form{
     grid-template-columns:1fr;
@@ -762,6 +788,7 @@
 
 
             <div class="hm-saved-sources" id="hmSavedSources"></div>
+            <div class="hm-built-in-sources" id="hmBuiltInSources"></div>
 </div>
 </section>
 
@@ -957,6 +984,7 @@ const sourceNameInput = document.getElementById("hmSourceName");
 const sourceWebsiteInput = document.getElementById("hmSourceWebsite");
 const addSourceBtn = document.getElementById("hmAddSourceBtn");
 const savedSourcesEl = document.getElementById("hmSavedSources");
+const builtInSourcesEl = document.getElementById("hmBuiltInSources");
 const sourceDiscoveryStatus = document.getElementById("hmSourceDiscoveryStatus");
 
 function hmEscapeHtml(value) {
@@ -1026,6 +1054,98 @@ function hmRenderSavedSources(payload) {
 async function hmLoadSavedSources() {
   const payload = await hmFetchJson(SOURCES_API_URL);
   hmRenderSavedSources(payload);
+  hmRenderBuiltInSources(payload);
+}
+
+function hmRenderBuiltInSources(payload) {
+  const builtIn = Array.isArray(payload?.built_in) ? payload.built_in : [];
+  const savedNames = new Set(
+    hmMergeSavedSources(payload).map((item) => String(item.name || "").trim().toLowerCase())
+  );
+
+  if (!builtIn.length) {
+    builtInSourcesEl.innerHTML = '<div class="hm-note">No built-in source options available.</div>';
+    return;
+  }
+
+  builtInSourcesEl.innerHTML = `
+    <div class="hm-msg-title">Built-in source options</div>
+    <div class="hm-note">Select built-in feeds to add them quickly. Already-saved sources are disabled.</div>
+    <div class="hm-builtin-controls">
+      <button class="hm-btn" id="hmAddSelectedBuiltInBtn" type="button">Add checked sources</button>
+      <button class="hm-btn" id="hmAddAllBuiltInBtn" type="button">Add all built-in sources</button>
+    </div>
+    <div class="hm-builtin-list">
+      ${builtIn
+        .map((source) => {
+          const normalized = String(source.name || "").trim().toLowerCase();
+          const disabled = savedNames.has(normalized) ? "disabled" : "";
+          return `
+            <label class="hm-built-in-item">
+              <input type="checkbox" name="hmBuiltInSource" value="${hmEscapeHtml(source.name)}" ${disabled} />
+              <span>${hmEscapeHtml(source.name)}${source.homepage ? ` · <a href="${hmEscapeHtml(source.homepage)}" target="_blank" rel="noopener noreferrer">visit</a>` : ""}</span>
+            </label>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+
+  document
+    .getElementById("hmAddSelectedBuiltInBtn")
+    .addEventListener("click", () => hmAddSelectedBuiltInSources(builtIn, savedNames, false));
+  document
+    .getElementById("hmAddAllBuiltInBtn")
+    .addEventListener("click", () => hmAddSelectedBuiltInSources(builtIn, savedNames, true));
+}
+
+async function hmAddSelectedBuiltInSources(builtIn, savedNames, addAll = false) {
+  const selectedNames = addAll
+    ? builtIn.map((source) => source.name)
+    : Array.from(document.querySelectorAll('input[name="hmBuiltInSource"]'))
+        .filter((checkbox) => checkbox.checked)
+        .map((checkbox) => checkbox.value);
+
+  const sourcesToAdd = builtIn.filter((source) => {
+    const normalized = String(source.name || "").trim().toLowerCase();
+    return selectedNames.includes(source.name) && !savedNames.has(normalized);
+  });
+
+  if (!sourcesToAdd.length) {
+    sourceDiscoveryStatus.textContent = "No new built-in sources selected.";
+    return;
+  }
+
+  addSourceBtn.disabled = true;
+  sourceDiscoveryStatus.textContent = `Adding ${sourcesToAdd.length} built-in source${sourcesToAdd.length === 1 ? "" : "s"}...`;
+
+  try {
+    for (const source of sourcesToAdd) {
+      await hmFetchJson(SOURCES_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: source.name,
+          url: source.feedUrl,
+          type: "rss",
+          enabled: true,
+          homepage: source.homepage || "",
+          confidence: 1,
+          discovered_by: "catalog",
+          validated_at: new Date().toISOString()
+        })
+      });
+    }
+
+    sourceDiscoveryStatus.textContent = `Added ${sourcesToAdd.length} built-in source${sourcesToAdd.length === 1 ? "" : "s"}.`;
+    await hmLoadSavedSources();
+    await hmRefreshAssessment();
+  } catch (err) {
+    sourceDiscoveryStatus.textContent = "Could not add built-in sources.";
+    error.textContent = err.message || "Failed to add built-in sources.";
+  } finally {
+    addSourceBtn.disabled = false;
+  }
 }
 
 async function hmRefreshAssessment() {
@@ -1250,14 +1370,7 @@ function renderPlotHeatmap(scenarios) {
 
 async function loadSavedSources() {
   try {
-    const res = await fetch(SOURCES_API_URL, {
-      method: "GET",
-      headers: { "Accept": "application/json" }
-    });
-
-    if (!res.ok) throw new Error(`Failed to load sources: ${res.status}`);
-    const data = await res.json();
-    renderSavedSources([...(data.global || []), ...(data.topic || [])]);
+    await hmLoadSavedSources();
   } catch (err) {
     console.error(err);
   }

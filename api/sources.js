@@ -1,3 +1,4 @@
+import { SOURCE_CATALOG } from "../lib/source-catalog.js";
 import {
   getSavedSources,
   saveSource,
@@ -48,7 +49,7 @@ export default async function handler(req, res) {
   try {
     if (req.method === "GET") {
       const sources = await getSavedSources(topic);
-      return json(req, res, 200, sources);
+      return json(req, res, 200, { ...sources, built_in: SOURCE_CATALOG });
     }
 
     if (req.method === "POST") {
