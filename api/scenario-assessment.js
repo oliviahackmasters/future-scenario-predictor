@@ -1,8 +1,34 @@
 import Parser from "rss-parser";
 import OpenAI from "openai";
+import url from "url";
 import { getMergedSavedSources } from "../lib/source-store.js";
 
 const parser = new Parser();
+
+// Monkey-patch url.parse to use WHATWG URL API to avoid deprecation warning
+const originalParse = url.parse;
+url.parse = function(urlString, parseQueryString = false, slashesDenoteHost = false) {
+  try {
+    const u = new URL(urlString);
+    const result = {
+      protocol: u.protocol,
+      host: u.host,
+      hostname: u.hostname,
+      port: u.port,
+      pathname: u.pathname,
+      search: u.search,
+      hash: u.hash,
+      href: u.href,
+      path: u.pathname + u.search,
+      query: parseQueryString ? Object.fromEntries(u.searchParams) : u.search.slice(1)
+    };
+    return result;
+  } catch (e) {
+    // Fallback to original for invalid URLs
+    return originalParse(urlString, parseQueryString, slashesDenoteHost);
+  }
+};
+
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const RSS_FETCH_TIMEOUT_MS = 8000;
