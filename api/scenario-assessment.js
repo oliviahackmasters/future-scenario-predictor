@@ -986,7 +986,7 @@ async function generateScenarioAssessment(topicConfig, articles, externalSignals
           }
         ],
         temperature: 0.2,
-        max_output_tokens: 1100,
+        max_output_tokens: 4000,
         
         text: {
           format: {
