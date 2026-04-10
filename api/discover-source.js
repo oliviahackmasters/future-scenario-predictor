@@ -86,12 +86,44 @@ export default async function handler(req, res) {
     }
 
     // Handle direct RSS URL (website field used as RSS URL)
-    if (name && website && (website.includes('rss') || website.includes('feed') || website.includes('.xml'))) {
+    if (name && website && (website.includes('rss') || website.includes('feed') || website.includes('.xml') || website.includes('feeds.'))) {
+      const validated = await validateKnownFeed(website);
+      if (!validated.ok) {
+        return json(req, res, 422, {
+          ok: false,
+          error: "direct_feed_invalid",
+          message: `The provided RSS URL is not a valid feed: ${validated.error}`
+        });
+      }
+
+      return json(req, res, 200, {
+        ok: true,
+        method: "direct_rss",
+        topic,
+        source: {
+          name,
+          url: validated.source.feedUrl,
+          type: "rss",
+          enabled: true,
+          homepage: "",
+          confidence: 0.9,
+          discovered_by: "direct_rss",
+          validated_at: new Date().toISOString()
+        },
+        validation: {
+          feed_title: validated.source.feedTitle,
+          item_count: validated.source.itemCount
+        }
+      });
+    }
+
+    // Fallback: try to validate website as direct RSS URL if it looks like a URL
+    if (name && website && (website.startsWith('http://') || website.startsWith('https://'))) {
       const validated = await validateKnownFeed(website);
       if (validated.ok) {
         return json(req, res, 200, {
           ok: true,
-          method: "direct_rss",
+          method: "direct_url",
           topic,
           source: {
             name,
@@ -99,14 +131,21 @@ export default async function handler(req, res) {
             type: "rss",
             enabled: true,
             homepage: "",
-            confidence: 0.9,
-            discovered_by: "direct_rss",
+            confidence: 0.8,
+            discovered_by: "direct_url",
             validated_at: new Date().toISOString()
           },
           validation: {
             feed_title: validated.source.feedTitle,
             item_count: validated.source.itemCount
           }
+        });
+      } else {
+        // If validation failed, provide detailed error
+        return json(req, res, 422, {
+          ok: false,
+          error: "url_validation_failed",
+          message: `Could not validate the provided URL as an RSS feed. Error: ${validated.error || 'Unknown error'}. Please check the URL and try again.`
         });
       }
     }
@@ -206,7 +245,7 @@ export default async function handler(req, res) {
     return json(req, res, 422, {
       ok: false,
       error: "not_found",
-      message: "Could not find that source by name. Try adding both a name and URL for a custom source, or provide a website URL to discover from."
+      message: "Could not find that source by name. Try providing both a name and a valid RSS feed URL, or a website URL to discover feeds from."
     });
   } catch (error) {
     return json(req, res, 500, {
