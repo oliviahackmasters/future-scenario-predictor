@@ -8,6 +8,7 @@
     "start": "node scenario-assessment-api.js"
   },
   "dependencies": {
+    "@vercel/blob": "^2.3.3",
     "@vercel/kv": "^3.0.0",
     "cors": "^2.8.5",
     "express": "^4.21.2",

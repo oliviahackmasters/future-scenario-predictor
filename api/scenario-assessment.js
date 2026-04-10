@@ -1,6 +1,6 @@
 import Parser from "rss-parser";
 import OpenAI from "openai";
-import { kv } from "@vercel/kv";
+import { put, list } from "@vercel/blob";
 import { getMergedSavedSources } from "../lib/source-store.js";
 import { discoverFeedFromWebsite } from "../lib/feed-discovery.js";
 
@@ -10,10 +10,42 @@ function getHistoryKey(topic) {
   return `scenario-history:${String(topic || "iran").toLowerCase()}`;
 }
 
+const HISTORY_BLOB_PREFIX = "history";
+
+function getHistoryBlobPath(topic) {
+  return `${HISTORY_BLOB_PREFIX}/${String(topic || "iran").toLowerCase()}.json`;
+}
+
+async function readJsonFromBlobUrl(url) {
+  const response = await fetch(url, {
+    headers: {
+      Accept: "application/json"
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch blob JSON (${response.status})`);
+  }
+
+  return await response.json();
+}
+
 async function loadAssessmentHistory(topic) {
   try {
-    const key = getHistoryKey(topic);
-    const history = await kv.get(key);
+    const pathname = getHistoryBlobPath(topic);
+
+    const result = await list({
+      prefix: pathname,
+      limit: 10
+    });
+
+    const blob = Array.isArray(result?.blobs)
+      ? result.blobs.find((item) => item.pathname === pathname)
+      : null;
+
+    if (!blob?.url) return [];
+
+    const history = await readJsonFromBlobUrl(blob.url);
 
     if (!Array.isArray(history)) return [];
 
@@ -21,14 +53,14 @@ async function loadAssessmentHistory(topic) {
       .filter((item) => item && item.date && Array.isArray(item.scenario_scores))
       .sort((a, b) => String(a.date).localeCompare(String(b.date)));
   } catch (error) {
-    console.error("Failed to load assessment history from KV:", error.message);
+    console.error("Failed to load assessment history from Blob:", error.message);
     return [];
   }
 }
 
 async function saveAssessmentHistory(topic, entry) {
   try {
-    const key = getHistoryKey(topic);
+    const pathname = getHistoryBlobPath(topic);
     const existing = await loadAssessmentHistory(topic);
 
     const entryDate = String(entry.date || new Date().toISOString().slice(0, 10));
@@ -38,11 +70,11 @@ async function saveAssessmentHistory(topic, entry) {
       updated_at: entry.updated_at || new Date().toISOString()
     };
 
-    const index = existing.findIndex((item) => item.date === entryDate);
+    const existingIndex = existing.findIndex((item) => item.date === entryDate);
 
-    if (index >= 0) {
-      existing[index] = {
-        ...existing[index],
+    if (existingIndex >= 0) {
+      existing[existingIndex] = {
+        ...existing[existingIndex],
         ...mergedEntry
       };
     } else {
@@ -51,16 +83,23 @@ async function saveAssessmentHistory(topic, entry) {
 
     existing.sort((a, b) => String(a.date).localeCompare(String(b.date)));
 
-    await kv.set(key, existing);
+    await put(
+      pathname,
+      JSON.stringify(existing, null, 2),
+      {
+        access: "public",
+        addRandomSuffix: false,
+        contentType: "application/json",
+        allowOverwrite: true
+      }
+    );
 
     return existing;
   } catch (error) {
-    console.error("Failed to save assessment history to KV:", error.message);
+    console.error("Failed to save assessment history to Blob:", error.message);
     throw error;
   }
 }
-
-
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -1206,10 +1245,10 @@ export default async function handler(req, res) {
       message: "OPENAI_API_KEY is not set."
     });
   }
-  if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
+if (!process.env.BLOB_READ_WRITE_TOKEN) {
   return json(res, 500, {
-    error: "missing_kv_config",
-    message: "KV_REST_API_URL or KV_REST_API_TOKEN is not set."
+    error: "missing_blob_config",
+    message: "BLOB_READ_WRITE_TOKEN is not set."
   });
 }
 
@@ -1250,7 +1289,7 @@ export default async function handler(req, res) {
     endTimer(assessmentTimer);
 
 
-    const nowIso = new Date().toISOString();
+   const nowIso = new Date().toISOString();
 const today = nowIso.slice(0, 10);
 const topArticle = articles[0] || null;
 
@@ -1286,12 +1325,16 @@ const historyEntry = {
   }))
 };
 
-    let history = [];
-    try {
-      history = await saveAssessmentHistory(topic, historyEntry);
-    } catch (error) {
-      console.error("Unable to save assessment history:", error.message);
-    }
+let history = [];
+try {
+  history = await saveAssessmentHistory(topic, historyEntry);
+  if (!Array.isArray(history) || !history.length) {
+    history = await loadAssessmentHistory(topic);
+  }
+} catch (error) {
+  console.error("Unable to save assessment history:", error.message);
+  history = await loadAssessmentHistory(topic);
+}
 
     endTimer(totalTimer);
 
