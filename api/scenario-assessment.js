@@ -86,7 +86,8 @@ const TOPICS = {
       { name: "FT Oil", url: "https://www.ft.com/oil?format=rss" },
       { name: "Al Jazeera", url: "https://www.aljazeera.com/xml/rss/all.xml" },
       { name: "FT Energy", url: "https://www.ft.com/energy?format=rss" },
-      { name: "Guardian World", url: "https://www.theguardian.com/world/rss" }
+      { name: "Guardian World", url: "https://www.theguardian.com/world/rss" },
+      { name: "Reuters World", url: "https://feeds.reuters.com/Reuters/worldNews" }
     ],
     keywordFilter: [
       "iran",
