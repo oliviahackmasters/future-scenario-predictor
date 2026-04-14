@@ -566,12 +566,14 @@ function isRelevantToTopic(item, topicConfig) {
   const snippet = String(item.contentSnippet || "").toLowerCase();
   const haystack = `${title} ${snippet}`;
 
-  const primaryTerms = topicConfig.keywordFilter.slice(0, 5);
-  const hasPrimaryHit = primaryTerms.some((term) => haystack.includes(term));
-  if (hasPrimaryHit) return true;
-
+  const primaryTerms = topicConfig.keywordFilter.slice(0, 8);
+  const primaryHits = primaryTerms.filter((term) => haystack.includes(term)).length;
   const allHits = topicConfig.keywordFilter.filter((term) => haystack.includes(term)).length;
-  return allHits >= MIN_MATCHES_REQUIRED;
+
+  if (primaryHits >= 1) return true;
+  if (allHits >= 3) return true;
+
+  return false;
 }
 
 function scoreAndSort(items, savedSourceNames = [], topicConfig) {
@@ -1167,25 +1169,26 @@ function buildFallbackAssessment(topicConfig, articles, externalSignals, summary
 async function generateScenarioAssessment(topicConfig, articles, externalSignals) {
   if (!articles.length && !externalSignals.length) {
     return {
-      summary: "Not enough current source material was available to generate a live assessment.",
-      scenarios: topicConfig.scenarios.map((s) => ({ ...s, score: 25 })),
-      signals: topicConfig.trackedSignals.map((s) => ({
-        name: s,
-        reading: "No recent evidence available.",
-        direction: "neutral",
-        confidence: "Low",
-        sources: []
-      })),
-      calculation: {
-        scenarios: topicConfig.scenarios.map((s) => ({
-          name: s.name,
-          ai_score: 0,
-          market_boost: 0,
-          final_score: 25,
-          reasoning: "No live evidence."
-        }))
-      }
-    };
+  mode: "no_evidence",
+  summary: "Not enough current source material was available to generate a live assessment.",
+  scenarios: topicConfig.scenarios.map((s) => ({ ...s, score: 25 })),
+  signals: topicConfig.trackedSignals.map((s) => ({
+    name: s,
+    reading: "No recent evidence available.",
+    direction: "neutral",
+    confidence: "Low",
+    sources: []
+  })),
+  calculation: {
+    scenarios: topicConfig.scenarios.map((s) => ({
+      name: s.name,
+      ai_score: 0,
+      market_boost: 0,
+      final_score: 25,
+      reasoning: "No live evidence."
+    }))
+  }
+};
   }
 
   const prompt = buildPrompt(topicConfig, articles, externalSignals);
@@ -1255,6 +1258,7 @@ async function generateScenarioAssessment(topicConfig, articles, externalSignals
   }
 
   return {
+    mode: "ai",
     summary: parsed.summary,
     scenarios: normalizedScenarios,
     signals,
