@@ -891,32 +891,6 @@
       </p>
        <section class="hm-card">
       <button class="hm-btn" id="hmRefreshBtn">Refresh analysis</button>
-  <div class="hm-source-manager">
-    <div class="hm-source-manager-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-      <div class="hm-msg-title">Manage Sources</div>
-      <button class="hm-btn hm-source-toggle-btn" id="hmSourceManagerToggle" type="button">Hide sources</button>
-    </div>
-
-    <div class="hm-source-form">
-  <input
-    class="hm-source-input"
-    id="hmSourceName"
-    placeholder="Source name, e.g. Reuters"
-  />
-  <input
-    class="hm-source-input"
-    id="hmSourceWebsite"
-    placeholder="Website URL or RSS feed URL, e.g. https://rss.cnn.com/rss/edition_world.rss"
-  />
-  <button class="hm-btn" id="hmAddSourceBtn">Find source</button>
-</div>
-
-<div class="hm-note" id="hmSourceDiscoveryStatus"></div>
-
-
-            <div class="hm-saved-sources" id="hmSavedSources"></div>
-            <div class="hm-built-in-sources" id="hmBuiltInSources"></div>
-</div>
 </section>
 
 <div class="hm-top-grid">
@@ -999,6 +973,33 @@
       <section class="hm-card">
         <div class="hm-msg-title">Tracked signals</div>
         <div class="hm-signals" id="hmSignalTable"></div>
+      </section>
+
+      <section class="hm-card">
+        <div class="hm-source-manager">
+          <div class="hm-source-manager-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+            <div class="hm-msg-title">Manage Sources</div>
+            <button class="hm-btn hm-source-toggle-btn" id="hmSourceManagerToggle" type="button">Hide sources</button>
+          </div>
+
+          <div class="hm-source-form">
+            <input
+              class="hm-source-input"
+              id="hmSourceName"
+              placeholder="Source name, e.g. Reuters"
+            />
+            <input
+              class="hm-source-input"
+              id="hmSourceWebsite"
+              placeholder="Website URL or RSS feed URL, e.g. https://rss.cnn.com/rss/edition_world.rss"
+            />
+            <button class="hm-btn" id="hmAddSourceBtn">Find source</button>
+          </div>
+
+          <div class="hm-note" id="hmSourceDiscoveryStatus"></div>
+          <div class="hm-saved-sources" id="hmSavedSources"></div>
+          <div class="hm-built-in-sources" id="hmBuiltInSources"></div>
+        </div>
       </section>
     </div>
   </div>
