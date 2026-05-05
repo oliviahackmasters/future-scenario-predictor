@@ -162,39 +162,46 @@ function prefilterArticles(articles, scenarios) {
 
 function heuristicAssessment(scenarios, articles, sources) {
   const sourceMap = new Map(sources.map((source) => [source.id, source]));
-  const rawScores = scenarios.map((scenario) => {
-    let evidence = 0;
+
+  return scenarios.map((scenario) => {
     const matched = new Set();
     const sourceWeights = [];
+    const evidenceBySource = new Map();
 
     for (const article of articles) {
       const match = scoreItemAgainstSignals(article, scenario);
       if (!match.score) continue;
       match.matchedSignals.forEach((signal) => matched.add(signal));
+
       const source = sourceMap.get(article.source_id);
-      const relevance = Math.min(100, Math.round((match.score / Math.max(1, scenario.signals.length)) * 100));
       const reliability = source?.reliability ?? article.reliability ?? 70;
+      const relevance = Math.min(100, Math.round((match.score / Math.max(1, scenario.signals.length)) * 100));
       const weighting = Math.round((relevance * reliability) / 100);
-      evidence += weighting;
+
+      const previous = evidenceBySource.get(article.source_id) || 0;
+      evidenceBySource.set(article.source_id, Math.max(previous, weighting));
       sourceWeights.push({ name: article.source, relevance_percent: relevance, reliability_percent: reliability, weighting_percent: weighting, selected: true });
     }
 
+    const signalCoverage = Math.round((matched.size / Math.max(1, scenario.signals.length)) * 100);
+    const sourceSupport = Array.from(evidenceBySource.values()).reduce((sum, value) => sum + value, 0);
+
+    // Independent likelihood: do not normalize against other scenarios.
+    // Coverage is the main driver; multiple reliable sources can lift confidence, but the score is capped at 100.
+    const likelihood = matched.size
+      ? Math.min(100, Math.round((signalCoverage * 0.7) + (Math.min(100, sourceSupport) * 0.3)))
+      : 0;
+
     return {
       scenario: scenario.name,
-      raw: evidence,
+      likelihood_percent: likelihood,
+      rationale: matched.size
+        ? `Matched ${matched.size} of ${scenario.signals.length} user-defined signal(s) in selected sources. This score is independent, not normalized against other scenarios.`
+        : "No strong signal match found in selected sources; independent likelihood is therefore low.",
       matched_signals: Array.from(matched),
       source_weights: sourceWeights.slice(0, 6)
     };
   });
-
-  const total = rawScores.reduce((sum, item) => sum + item.raw, 0);
-  return rawScores.map((item) => ({
-    scenario: item.scenario,
-    likelihood_percent: total > 0 ? Math.round((item.raw / total) * 100) : Math.round(100 / Math.max(1, scenarios.length)),
-    rationale: item.matched_signals.length ? `Matched ${item.matched_signals.length} user-defined signal(s) in selected sources.` : "No strong signal match found; estimate is a low-confidence baseline.",
-    matched_signals: item.matched_signals,
-    source_weights: item.source_weights
-  }));
 }
 
 async function callModel({ scenarios, articles, sources }) {
@@ -203,7 +210,7 @@ async function callModel({ scenarios, articles, sources }) {
   }
 
   const prompt = JSON.stringify({
-    instruction: "Estimate the likelihood of each user-defined scenario from 0-100 using only the selected source articles. Likelihoods should sum to 100 across the scenarios. Report source relevance, source reliability, and weighting for each useful source. Do not invent evidence.",
+    instruction: "Estimate each user-defined scenario independently from 0-100 using only the selected source articles. Do not normalize the scores and do not make them sum to 100. A single scenario should not automatically be 100%; two scenarios should not automatically be 50/50. Score each scenario by evidence strength: 0 means no meaningful evidence in the selected sources, 50 means moderate evidence, and 100 means very strong/current evidence across multiple reliable sources. Report source relevance, source reliability, and weighting for each useful source. Do not invent evidence.",
     scenarios,
     selected_sources: sources.map(({ id, name, url, reliability }) => ({ id, name, url, reliability_percent: reliability })),
     articles: articles.map((article) => ({
@@ -260,7 +267,7 @@ async function callModel({ scenarios, articles, sources }) {
     openai.responses.create({
       model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
       input: [
-        { role: "developer", content: [{ type: "input_text", text: "Return compact JSON only. Ground every likelihood in the supplied article snippets and user-defined signals." }] },
+        { role: "developer", content: [{ type: "input_text", text: "Return compact JSON only. Ground every independent likelihood in the supplied article snippets and user-defined signals. Never normalize scenario scores against each other." }] },
         { role: "user", content: [{ type: "input_text", text: prompt }] }
       ],
       temperature: 0.2,
