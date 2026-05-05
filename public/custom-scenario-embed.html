@@ -26,10 +26,10 @@
     #hmScenarioPlotter textarea{resize:none;overflow:hidden;min-height:44px;height:auto}
     #hmScenarioPlotter input::placeholder,#hmScenarioPlotter textarea::placeholder{color:rgba(255,255,255,.55);opacity:1}
 
-    /* 50/50 scenario and signal columns, with a fixed generate button column. */
-    #hmScenarioPlotter .scenario-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 118px;gap:12px;margin:0 0 14px;width:100%;min-width:0;align-items:stretch}
+    /* Short-name column + equal-width scenario and signal columns, with fixed generate button. */
+    #hmScenarioPlotter .scenario-grid{display:grid;grid-template-columns:minmax(130px,.35fr) minmax(0,1fr) minmax(0,1fr) 118px;gap:12px;margin:0 0 14px;width:100%;min-width:0;align-items:stretch}
     #hmScenarioPlotter .scenario-row{display:contents}
-    #hmScenarioPlotter .go{grid-column:3;grid-row:1 / span 4;min-height:212px}
+    #hmScenarioPlotter .go{grid-column:4;grid-row:1 / span 4;min-height:212px}
 
     #hmScenarioPlotter .hm-card,#hmScenarioPlotter .result-card,#hmScenarioPlotter .source-line,#hmScenarioPlotter .sources-title,#hmScenarioPlotter .source-editor,#hmScenarioPlotter .evidence{border:1px solid var(--hm-copper);background:rgba(255,255,255,.01);padding:14px;min-width:0}
     #hmScenarioPlotter .section-label,#hmScenarioPlotter .source-editor summary,#hmScenarioPlotter .result-card strong{margin:0 0 8px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--hm-white)}
@@ -49,7 +49,8 @@
     #hmScenarioPlotter .evidence:empty{display:none}
     #hmScenarioPlotter .evidence a{color:var(--hm-white);text-decoration:underline;text-decoration-color:var(--hm-copper)}
     #hmScenarioPlotter .small{font-size:12px;line-height:1.5;color:rgba(255,255,255,.62);font-weight:400;text-transform:none;letter-spacing:0;margin:8px 0 0}
-    @media(max-width:900px){#hmScenarioPlotter .scenario-grid{grid-template-columns:1fr}#hmScenarioPlotter .scenario-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}#hmScenarioPlotter .go{grid-column:auto;grid-row:auto;min-height:44px}#hmScenarioPlotter .results{grid-template-columns:repeat(2,minmax(0,1fr))}#hmScenarioPlotter .sources,#hmScenarioPlotter .source-editor-grid{grid-template-columns:1fr}}
+    @media(max-width:1100px){#hmScenarioPlotter .scenario-grid{grid-template-columns:minmax(115px,.35fr) minmax(0,1fr) minmax(0,1fr) 110px}}
+    @media(max-width:900px){#hmScenarioPlotter .scenario-grid{grid-template-columns:1fr}#hmScenarioPlotter .scenario-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}#hmScenarioPlotter .go{grid-column:auto;grid-row:auto;min-height:44px}#hmScenarioPlotter .results{grid-template-columns:repeat(2,minmax(0,1fr))}#hmScenarioPlotter .sources,#hmScenarioPlotter .source-editor-grid{grid-template-columns:1fr}}
     @media(max-width:560px){#hmScenarioPlotter .hm-wrap{padding:14px}#hmScenarioPlotter .scenario-row,#hmScenarioPlotter .results{grid-template-columns:1fr}}
   </style>
 </head>
@@ -104,7 +105,7 @@
         for(let i=0;i<4;i+=1){
           const row=document.createElement('div');
           row.className='scenario-row';
-          row.innerHTML=`<input id="scenario-${i}" placeholder="${i===0?'Describe scenario':`Describe scenario ${i+1} (optional)`}" /><textarea id="signals-${i}" placeholder="List signals"></textarea>`;
+          row.innerHTML=`<input id="scenario-name-${i}" placeholder="${i===0?'Scenario name':'Scenario name (optional)'}" /><input id="scenario-${i}" placeholder="${i===0?'Describe scenario':`Describe scenario ${i+1} (optional)`}" /><textarea id="signals-${i}" placeholder="List signals"></textarea>`;
           scenarioGrid.appendChild(row);
           const textarea=row.querySelector('textarea');
           textarea.addEventListener('input',()=>autoGrow(textarea));
@@ -147,15 +148,19 @@
       function collectScenarios(){
         const scenarios=[];
         for(let i=0;i<4;i+=1){
+          const shortName=document.getElementById(`scenario-name-${i}`).value.trim();
           const description=document.getElementById(`scenario-${i}`).value.trim();
           const signals=document.getElementById(`signals-${i}`).value.split(/[\n,;]+/).map(item=>item.trim()).filter(Boolean);
-          if(description&&signals.length)scenarios.push({name:description.slice(0,80),description,signals});
+          if((shortName||description)&&signals.length){
+            const fallbackName=description?description.slice(0,80):`Scenario ${i+1}`;
+            scenarios.push({name:(shortName||fallbackName).slice(0,80),description:description||shortName,signals});
+          }
         }
         return scenarios;
       }
       async function assess(){
         const scenarios=collectScenarios();
-        if(!scenarios.length){status.textContent='Enter at least one scenario and at least one signal.';return}
+        if(!scenarios.length){status.textContent='Enter at least one scenario name or description, plus at least one signal.';return}
         const selectedSources=state.sources.filter(source=>source.enabled);
         if(!selectedSources.length){status.textContent='Select at least one source.';return}
         const go=document.getElementById('go');
@@ -174,7 +179,7 @@
           const card=document.getElementById(`result-${i}`);const scenario=scenarios[i];
           if(!scenario){card.innerHTML=`<span><strong>Scenario ${i+1} likelihood</strong><br>%<br><span class="small">if entered</span></span>`;continue}
           const score=byName.get(scenario.name)||data.scenario_scores?.[i];
-          card.innerHTML=`<span><strong>${scenario.name}</strong><br>${Math.round(score?.likelihood_percent||0)}%<br><span class="small">${score?.rationale||''}</span></span>`;
+          card.innerHTML=`<span><strong>${escapeHtml(scenario.name)}</strong><br>${Math.round(score?.likelihood_percent||0)}%<br><span class="small">${escapeHtml(score?.rationale||'')}</span></span>`;
         }
         const sourceWeightsByName=new Map();
         (data.scenario_scores||[]).forEach(score=>(score.source_weights||[]).forEach(weight=>{const existing=sourceWeightsByName.get(weight.name);if(!existing||weight.weighting_percent>existing.weighting_percent)sourceWeightsByName.set(weight.name,weight)}));
@@ -192,7 +197,7 @@
         persistSources();renderSources();document.getElementById('new-source-name').value='';document.getElementById('new-source-url').value='';document.getElementById('new-source-reliability').value='';
       });
       document.getElementById('new-session').addEventListener('click',()=>{
-        for(let i=0;i<4;i+=1){document.getElementById(`scenario-${i}`).value='';const textarea=document.getElementById(`signals-${i}`);textarea.value='';autoGrow(textarea)}
+        for(let i=0;i<4;i+=1){document.getElementById(`scenario-name-${i}`).value='';document.getElementById(`scenario-${i}`).value='';const textarea=document.getElementById(`signals-${i}`);textarea.value='';autoGrow(textarea)}
         status.textContent='New session started.';evidence.innerHTML='';renderEmptyResults();
       });
       renderScenarios();renderEmptyResults();renderSources();
