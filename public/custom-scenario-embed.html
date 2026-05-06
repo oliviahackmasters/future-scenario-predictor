@@ -6,10 +6,10 @@
   <title>Custom Scenario Plotter</title>
   <style>
     :root{--hm-black:#000;--hm-white:#fff;--hm-copper:#D18057}
-    html,body{margin:0;min-height:100%;background:var(--hm-black)}
+    html,body{margin:0;min-height:100%;height:auto;background:var(--hm-black);overflow:visible!important}
     #hmScenarioPlotter *{box-sizing:border-box}
-    #hmScenarioPlotter{font-family:"Montserrat",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--hm-black);color:var(--hm-white);width:100%}
-    #hmScenarioPlotter .hm-wrap{background:var(--hm-black);color:var(--hm-white);border:1px solid var(--hm-copper);padding:18px;letter-spacing:.2px;width:100%;max-width:100%;margin:0}
+    #hmScenarioPlotter{font-family:"Montserrat",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--hm-black);color:var(--hm-white);width:100%;min-height:100%;overflow:visible}
+    #hmScenarioPlotter .hm-wrap{background:var(--hm-black);color:var(--hm-white);border:1px solid var(--hm-copper);padding:18px;letter-spacing:.2px;width:100%;max-width:100%;margin:0;overflow:visible}
     #hmScenarioPlotter .hm-titlebar{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;margin:0 0 14px}
     #hmScenarioPlotter .hm-title{display:flex;align-items:center;gap:10px;margin:0;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;font-size:14px;color:var(--hm-white)}
     #hmScenarioPlotter .hm-badge{display:inline-block;border:1px solid var(--hm-copper);padding:6px 10px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;font-size:12px;color:var(--hm-copper)}
@@ -19,11 +19,14 @@
     #hmScenarioPlotter button:hover{background:rgba(209,128,87,.12)}
     #hmScenarioPlotter button:disabled{opacity:.55;cursor:wait}
     #hmScenarioPlotter .primary{background:var(--hm-copper);color:var(--hm-black);border-color:var(--hm-copper)}
-    #hmScenarioPlotter input,#hmScenarioPlotter textarea{width:100%;background:var(--hm-black);color:var(--hm-white);border:1px solid var(--hm-copper);border-radius:0;outline:none;padding:12px 14px;min-height:44px;font:inherit;font-size:13px;line-height:1.45}
-    #hmScenarioPlotter textarea{resize:none;overflow:hidden;min-height:44px;height:auto}
+    #hmScenarioPlotter input,#hmScenarioPlotter textarea{width:100%;background:var(--hm-black);color:var(--hm-white);border:1px solid var(--hm-copper);border-radius:0;outline:none;padding:12px 14px;min-height:44px;font:inherit;font-size:13px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}
+    #hmScenarioPlotter textarea{resize:none;overflow:hidden;height:auto}
+    #hmScenarioPlotter .scenario-name{min-height:44px}
+    #hmScenarioPlotter .scenario-description{min-height:64px}
+    #hmScenarioPlotter .scenario-signals{min-height:96px}
     #hmScenarioPlotter input::placeholder,#hmScenarioPlotter textarea::placeholder{color:rgba(255,255,255,.55);opacity:1}
     #hmScenarioPlotter .hm-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 14px}
-    #hmScenarioPlotter .scenario-grid{display:grid;grid-template-columns:minmax(130px,.35fr) minmax(0,1fr) minmax(0,1fr) 118px;gap:12px;margin:0 0 14px;width:100%;min-width:0;align-items:stretch}
+    #hmScenarioPlotter .scenario-grid{display:grid;grid-template-columns:minmax(150px,.45fr) minmax(0,1fr) minmax(0,1fr) 118px;gap:12px;margin:0 0 14px;width:100%;min-width:0;align-items:stretch}
     #hmScenarioPlotter .scenario-row{display:contents}
     #hmScenarioPlotter .go{grid-column:4;grid-row:1 / span 4;min-height:212px}
     #hmScenarioPlotter .hm-card,#hmScenarioPlotter .result-card,#hmScenarioPlotter .source-line,#hmScenarioPlotter .sources-title,#hmScenarioPlotter .source-editor,#hmScenarioPlotter .evidence{border:1px solid var(--hm-copper);background:rgba(255,255,255,.01);padding:14px;min-width:0}
@@ -31,22 +34,24 @@
     #hmScenarioPlotter .results{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;width:100%;max-width:100%;min-width:0;margin:0 0 14px}
     #hmScenarioPlotter .result-card{min-height:120px;display:flex;align-items:flex-start;justify-content:flex-start;text-align:left;color:var(--hm-white);overflow-wrap:anywhere;word-break:break-word}
     #hmScenarioPlotter .result-card span,#hmScenarioPlotter .result-card p{font-size:13px;line-height:1.5;margin:0 0 8px}
-    #hmScenarioPlotter .sources{display:grid;grid-template-columns:minmax(0,1fr) 150px;gap:12px;margin:0 0 14px;width:100%;min-width:0}
+    #hmScenarioPlotter .source-evidence-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start;margin:0 0 14px;width:100%}
+    #hmScenarioPlotter .sources{display:grid;grid-template-columns:minmax(0,1fr) 130px;gap:10px;margin:0;width:100%;min-width:0}
     #hmScenarioPlotter .sources-title{grid-column:1 / -1;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;min-height:52px}
-    #hmScenarioPlotter .source-line{color:rgba(255,255,255,.9);font-size:13px;line-height:1.45;display:flex;align-items:center;min-height:52px}
+    #hmScenarioPlotter .source-line{color:rgba(255,255,255,.9);font-size:13px;line-height:1.45;display:flex;align-items:center;min-height:48px;overflow-wrap:anywhere;word-break:break-word}
     #hmScenarioPlotter .source-toggle.off{color:rgba(255,255,255,.45);border-color:rgba(209,128,87,.45);background:rgba(255,255,255,.04)}
     #hmScenarioPlotter .source-editor{margin:0 0 14px}
     #hmScenarioPlotter .source-editor summary{cursor:pointer;list-style:none;margin:0}
     #hmScenarioPlotter .source-editor summary::-webkit-details-marker{display:none}
     #hmScenarioPlotter .source-editor-grid{margin-top:12px;display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,2fr) 90px auto;gap:12px}
     #hmScenarioPlotter .status{margin:0 0 14px;font-size:12px;line-height:1.5;color:rgba(255,255,255,.78);text-transform:uppercase;letter-spacing:.8px}
-    #hmScenarioPlotter .evidence{margin:0 0 14px;max-height:300px;overflow:auto;color:rgba(255,255,255,.9);font-size:13px;line-height:1.5}
+    #hmScenarioPlotter .evidence{margin:0;color:rgba(255,255,255,.9);font-size:13px;line-height:1.5;max-height:none;overflow:visible}
     #hmScenarioPlotter .evidence:empty{display:none}
     #hmScenarioPlotter .evidence a{color:var(--hm-white);text-decoration:underline;text-decoration-color:var(--hm-copper)}
     #hmScenarioPlotter .small{font-size:12px;line-height:1.5;color:rgba(255,255,255,.62);font-weight:400;text-transform:none;letter-spacing:0;margin:8px 0 0}
-    #hmScenarioPlotter .evidence-item{border-top:1px solid rgba(209,128,87,.45);padding:10px 0 0;margin:10px 0 0}
-    @media(max-width:900px){#hmScenarioPlotter .scenario-grid{grid-template-columns:1fr}#hmScenarioPlotter .scenario-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}#hmScenarioPlotter .go{grid-column:auto;grid-row:auto;min-height:44px}#hmScenarioPlotter .results{grid-template-columns:repeat(2,minmax(0,1fr))}#hmScenarioPlotter .sources,#hmScenarioPlotter .source-editor-grid{grid-template-columns:1fr}}
-    @media(max-width:560px){#hmScenarioPlotter .hm-wrap{padding:14px}#hmScenarioPlotter .scenario-row,#hmScenarioPlotter .results{grid-template-columns:1fr}}
+    #hmScenarioPlotter .evidence-item{border-top:1px solid rgba(209,128,87,.45);padding:10px 0 0;margin:10px 0 0;overflow-wrap:anywhere;word-break:break-word}
+    @media(max-width:1050px){#hmScenarioPlotter .source-evidence-row{grid-template-columns:1fr}#hmScenarioPlotter .sources{grid-template-columns:minmax(0,1fr) 150px}}
+    @media(max-width:900px){#hmScenarioPlotter .scenario-grid{grid-template-columns:1fr}#hmScenarioPlotter .scenario-row{display:grid;grid-template-columns:1fr;gap:8px}#hmScenarioPlotter .go{grid-column:auto;grid-row:auto;min-height:44px}#hmScenarioPlotter .results{grid-template-columns:repeat(2,minmax(0,1fr))}#hmScenarioPlotter .source-editor-grid{grid-template-columns:1fr}}
+    @media(max-width:560px){#hmScenarioPlotter .hm-wrap{padding:14px}#hmScenarioPlotter .results{grid-template-columns:1fr}#hmScenarioPlotter .sources{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
@@ -61,8 +66,6 @@
       <div class="scenario-grid" id="scenario-grid"></div>
       <div class="results" id="results"></div>
 
-      <div class="sources" id="available-sources"></div>
-
       <details class="source-editor hm-card">
         <summary>Add Tavily source / domain</summary>
         <div class="source-editor-grid">
@@ -75,7 +78,10 @@
       </details>
 
       <div class="status" id="status"></div>
-      <div class="evidence" id="evidence-used"></div>
+      <div class="source-evidence-row">
+        <div class="sources" id="available-sources"></div>
+        <div class="evidence" id="evidence-used"></div>
+      </div>
     </div>
   </div>
 
@@ -97,7 +103,12 @@
       const status=document.getElementById('status');
       const evidenceUsed=document.getElementById('evidence-used');
 
-      function autoGrow(el){el.style.height='auto';el.style.height=el.scrollHeight+'px'}
+      function postHeight(){
+        const height=Math.max(document.body.scrollHeight,document.documentElement.scrollHeight,document.getElementById('hmScenarioPlotter')?.scrollHeight||0);
+        try{window.parent&&window.parent.postMessage({type:'hmScenarioPlotterResize',height},'*')}catch(e){}
+      }
+      function autoGrow(el){el.style.height='auto';el.style.height=el.scrollHeight+'px';postHeight()}
+      function autoGrowAll(){document.querySelectorAll('#hmScenarioPlotter textarea').forEach(autoGrow);postHeight()}
       function reliabilityPct(source){const n=Number(source.reliability??source.reliability_percent??70);return Math.round(n<=1?n*100:n)}
       function sourceTypeLabel(source){return source.type==='web'?'Tavily domain':'RSS feed'}
       function renderScenarios(){
@@ -105,11 +116,12 @@
         for(let i=0;i<4;i+=1){
           const row=document.createElement('div');
           row.className='scenario-row';
-          row.innerHTML=`<input id="scenario-name-${i}" placeholder="${i===0?'Scenario name':'Scenario name (optional)'}" /><input id="scenario-${i}" placeholder="${i===0?'Describe scenario':`Describe scenario ${i+1} (optional)`}" /><textarea id="signals-${i}" placeholder="List signals"></textarea>`;
+          row.innerHTML=`<textarea class="scenario-name" id="scenario-name-${i}" placeholder="${i===0?'Scenario name':'Scenario name (optional)'}"></textarea><textarea class="scenario-description" id="scenario-${i}" placeholder="${i===0?'Describe scenario':`Describe scenario ${i+1} (optional)`}"></textarea><textarea class="scenario-signals" id="signals-${i}" placeholder="List signals"></textarea>`;
           scenarioGrid.appendChild(row);
-          const textarea=row.querySelector('textarea');
-          textarea.addEventListener('input',()=>autoGrow(textarea));
-          autoGrow(textarea);
+          row.querySelectorAll('textarea').forEach((textarea)=>{
+            textarea.addEventListener('input',()=>autoGrow(textarea));
+            autoGrow(textarea);
+          });
         }
         const go=document.createElement('button');
         go.className='go primary';
@@ -118,6 +130,7 @@
         go.textContent='Generate';
         go.addEventListener('click',assess);
         scenarioGrid.appendChild(go);
+        postHeight();
       }
       function renderEmptyResults(){
         results.innerHTML='';
@@ -128,6 +141,7 @@
           card.innerHTML=i===0?'<span><strong>Scenario likelihood</strong><br>%</span>':`<span><strong>Scenario ${i+1} likelihood</strong><br>%<br><span class="small">if entered</span></span>`;
           results.appendChild(card);
         }
+        postHeight();
       }
       function renderAvailableSources(){
         const enabledCount=state.sources.filter(source=>source.enabled).length;
@@ -143,10 +157,12 @@
           toggle.addEventListener('click',()=>{state.sources[index].enabled=!state.sources[index].enabled;persistSources();renderAvailableSources()});
           availableSources.appendChild(line);availableSources.appendChild(toggle);
         });
+        postHeight();
       }
       function renderEvidenceUsed(data){
         const articles=(data.evidence_articles||[]).slice(0,12);
         evidenceUsed.innerHTML=`<div class="section-label">Evidence used in prediction</div><p class="small">These are the articles that survived filtering and were supplied as evidence for the assessment.</p>` + (articles.length?articles.map(article=>`<div class="evidence-item"><strong>${escapeHtml(article.source)}</strong>: <a href="${escapeAttr(article.url)}" target="_blank" rel="noopener">${escapeHtml(article.title)}</a></div>`).join(''):'<div class="evidence-item">No evidence articles were returned for this assessment.</div>');
+        postHeight();
       }
       function persistSources(){localStorage.setItem('fsp-custom-sources',JSON.stringify(state.sources))}
       function collectScenarios(){
@@ -164,17 +180,17 @@
       }
       async function assess(){
         const scenarios=collectScenarios();
-        if(!scenarios.length){status.textContent='Enter at least one scenario name or description, plus at least one signal.';return}
+        if(!scenarios.length){status.textContent='Enter at least one scenario name or description, plus at least one signal.';postHeight();return}
         const selectedSources=state.sources.filter(source=>source.enabled);
-        if(!selectedSources.length){status.textContent='Select at least one feed or Tavily domain.';return}
+        if(!selectedSources.length){status.textContent='Select at least one feed or Tavily domain.';postHeight();return}
         const go=document.getElementById('go');
-        go.disabled=true;status.textContent='Scanning selected feeds and Tavily domains...';evidenceUsed.innerHTML='';
+        go.disabled=true;status.textContent='Scanning selected feeds and Tavily domains...';evidenceUsed.innerHTML='';postHeight();
         try{
           const response=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scenarios,sources:selectedSources})});
           const data=await response.json();
           if(!response.ok)throw new Error(data.error||'Assessment failed');
           state.latest=data;renderAssessment(data,scenarios);status.textContent=`Assessment complete. Confidence: ${data.confidence||'low'}.`;
-        }catch(error){status.textContent=error.message||'Assessment failed.'}finally{go.disabled=false}
+        }catch(error){status.textContent=error.message||'Assessment failed.'}finally{go.disabled=false;postHeight()}
       }
       function renderAssessment(data,scenarios){
         const byName=new Map();
@@ -187,6 +203,7 @@
         }
         renderAvailableSources();
         renderEvidenceUsed(data);
+        postHeight();
       }
       function escapeHtml(value){return String(value||'').replace(/[&<>"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[char]))}
       function escapeAttr(value){return escapeHtml(value).replace(/'/g,'&#039;')}
@@ -200,15 +217,17 @@
         const rawDomain=document.getElementById('new-source-url').value.trim();
         const domain=normaliseDomainInput(rawDomain);
         const reliability=Number(document.getElementById('new-source-reliability').value||70);
-        if(!name||!domain){status.textContent='Enter a source name and domain or website URL.';return}
+        if(!name||!domain){status.textContent='Enter a source name and domain or website URL.';postHeight();return}
         state.sources.push({id:`custom-web-${Date.now()}`,name,url:`https://${domain}`,homepage:`https://${domain}`,type:'web',reliability:Math.max(0,Math.min(100,reliability)),enabled:true});
-        persistSources();renderAvailableSources();document.getElementById('new-source-name').value='';document.getElementById('new-source-url').value='';document.getElementById('new-source-reliability').value='';status.textContent=`Added Tavily source domain: ${domain}.`;
+        persistSources();renderAvailableSources();document.getElementById('new-source-name').value='';document.getElementById('new-source-url').value='';document.getElementById('new-source-reliability').value='';status.textContent=`Added Tavily source domain: ${domain}.`;postHeight();
       });
       document.getElementById('new-session').addEventListener('click',()=>{
         for(let i=0;i<4;i+=1){document.getElementById(`scenario-name-${i}`).value='';document.getElementById(`scenario-${i}`).value='';const textarea=document.getElementById(`signals-${i}`);textarea.value='';autoGrow(textarea)}
-        status.textContent='New session started.';evidenceUsed.innerHTML='';renderEmptyResults();
+        status.textContent='New session started.';evidenceUsed.innerHTML='';renderEmptyResults();postHeight();
       });
-      renderScenarios();renderEmptyResults();renderAvailableSources();
+      if('ResizeObserver' in window){new ResizeObserver(()=>postHeight()).observe(document.getElementById('hmScenarioPlotter'))}
+      window.addEventListener('load',()=>{autoGrowAll();postHeight()});
+      renderScenarios();renderEmptyResults();renderAvailableSources();postHeight();
     })();
   </script>
 </body>
