@@ -34,12 +34,36 @@ export default async function handler(req, res) {
     const domain = normaliseDomain(req.query.domain || "");
     const q = String(req.query.q || "").trim();
     const query = q || buildScenarioSearchQuery({ topic, extraTerms: [topic] }) || topic;
+    const limit = Number(req.query.limit || 12);
 
     const articles = await fetchTavilyArticles({
       query,
       domains: domain ? [domain] : [],
-      maxResults: Number(req.query.limit || 8)
+      maxResults: limit
     });
+
+    res.setHeader("X-FSP-Tavily-Domain", domain || "default");
+    res.setHeader("X-FSP-Tavily-Query", query.slice(0, 240));
+    res.setHeader("X-FSP-Tavily-Result-Count", String(articles.length));
+
+    if (req.query.format === "json" || req.query.debug === "1") {
+      res.status(200).setHeader("Content-Type", "application/json; charset=utf-8");
+      return res.send(JSON.stringify({
+        provider: "tavily",
+        topic,
+        domain: domain || null,
+        query,
+        requested_limit: limit,
+        result_count: articles.length,
+        articles: articles.map(({ source, title, url, published_at, snippet, contentSnippet }) => ({
+          source,
+          title,
+          url,
+          published_at,
+          snippet: snippet || contentSnippet || ""
+        }))
+      }));
+    }
 
     const items = articles.map((article) => `
       <item>
@@ -56,7 +80,7 @@ export default async function handler(req, res) {
   <channel>
     <title>${escapeXml(`Tavily ${domain || "web"} search: ${topic}`)}</title>
     <link>https://tavily.com</link>
-    <description>${escapeXml(`Tavily-backed web search results for ${topic}`)}</description>
+    <description>${escapeXml(`Tavily-backed web search results for ${topic}. Result count: ${articles.length}. Query: ${query}`)}</description>
     ${items}
   </channel>
 </rss>`;
