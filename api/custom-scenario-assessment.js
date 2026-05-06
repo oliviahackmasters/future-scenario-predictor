@@ -206,27 +206,62 @@ async function fetchFeed(source) {
   }
 }
 
-function buildFocusedTavilyQuery({ scenarios }) {
-  const terms = Array.from(new Set([
-    ...scenarios.map((scenario) => scenario.name),
-    ...scenarios.flatMap((scenario) => scenario.signals),
-    "Iran",
-    "Strait of Hormuz",
-    "Gulf shipping",
-    "oil prices",
-    "US Iran talks"
-  ].map((value) => cleanText(value, 70)).filter(Boolean)));
+function getScenarioSearchText(scenarios = []) {
+  return scenarios.flatMap((scenario) => [
+    scenario.name,
+    scenario.description,
+    ...(Array.isArray(scenario.signals) ? scenario.signals : [])
+  ]).map((value) => cleanText(value, 140)).filter(Boolean);
+}
 
-  return terms.slice(0, 8).join(" OR ") || buildScenarioSearchQuery({ scenarios }) || "Iran";
+function buildFocusedTavilyQuery({ scenarios }) {
+  const terms = Array.from(new Set(getScenarioSearchText(scenarios)));
+  return terms.slice(0, 10).join(" OR ") || buildScenarioSearchQuery({ scenarios }) || "";
+}
+
+function buildCompactScenarioQuery({ scenarios }) {
+  const stopWords = new Set([
+    "the", "and", "for", "with", "within", "from", "that", "this", "scenario", "scenarios", "would", "could", "should", "about", "into", "over", "under", "through", "across", "after", "before", "during", "while", "very", "more", "less", "than"
+  ]);
+
+  const counts = new Map();
+  getScenarioSearchText(scenarios).forEach((value) => {
+    tokenise(value)
+      .filter((token) => token.length > 3 && !stopWords.has(token))
+      .forEach((token) => counts.set(token, (counts.get(token) || 0) + 1));
+  });
+
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([token]) => token)
+    .slice(0, 8)
+    .join(" ");
 }
 
 function buildTavilyQueryChain({ scenarios }) {
+  const focused = buildFocusedTavilyQuery({ scenarios });
+  const compact = buildCompactScenarioQuery({ scenarios });
+  const names = scenarios.map((scenario) => scenario.name).filter(Boolean).join(" OR ");
+  const descriptions = scenarios.map((scenario) => scenario.description).filter(Boolean).join(" OR ");
+
   return Array.from(new Set([
-    buildFocusedTavilyQuery({ scenarios }),
-    "Iran Strait of Hormuz Gulf shipping oil prices US Iran talks",
-    "Iran Hormuz oil war deal shipping",
-    "Iran"
+    focused,
+    compact,
+    names,
+    descriptions
   ].map((query) => cleanText(query, 280)).filter(Boolean)));
+}
+
+function hasScenarioTopicOverlap(article, scenarios) {
+  const haystack = `${article.title || ""} ${article.snippet || article.contentSnippet || ""}`.toLowerCase();
+  const tokens = new Set(
+    getScenarioSearchText(scenarios)
+      .flatMap(tokenise)
+      .filter((token) => token.length > 3)
+  );
+
+  if (!tokens.size) return false;
+  return Array.from(tokens).some((token) => haystack.includes(token));
 }
 
 async function fetchCustomTavilyArticles({ source, scenarios }) {
@@ -242,10 +277,11 @@ async function fetchCustomTavilyArticles({ source, scenarios }) {
       useDefaultDomains: false
     });
 
-    attempts.push({ query, result_count: articles.length });
-    if (!articles.length) continue;
+    const relevantArticles = articles.filter((article) => hasScenarioTopicOverlap(article, scenarios));
+    attempts.push({ query, result_count: articles.length, relevant_count: relevantArticles.length });
+    if (!relevantArticles.length) continue;
 
-    return articles.map((article) => ({
+    return relevantArticles.map((article) => ({
       ...article,
       source_id: source.id,
       source: source.name,
@@ -258,7 +294,7 @@ async function fetchCustomTavilyArticles({ source, scenarios }) {
     }));
   }
 
-  console.warn("No web results for custom source", { source: source.name, domain, attempts });
+  console.warn("No relevant web results for custom source", { source: source.name, domain, attempts });
   return [];
 }
 
@@ -298,6 +334,7 @@ function selectArticlesForModel(articles, scenarios, tavilySources = []) {
 
     const candidates = scored
       .filter((article) => article.source_id === source.id && article.searchProvider === "tavily")
+      .filter((article) => hasScenarioTopicOverlap(article, scenarios))
       .slice(0, MAX_TAVILY_FALLBACK_PER_SOURCE);
 
     for (const candidate of candidates) {
