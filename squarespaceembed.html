@@ -100,6 +100,38 @@
       min-width:0;
     }
 
+    #hmScenarioPlotter .hm-card:has(#hmRefreshBtn) {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+#hmScenarioPlotter #hmRefreshBtn {
+  flex: 0 0 auto;
+}
+
+#hmScenarioPlotter #hmStatus {
+  flex: 1 1 auto;
+  min-width: 180px;
+}
+
+#hmScenarioPlotter .hm-refresh-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+#hmScenarioPlotter .hm-refresh-row .hm-btn {
+  flex: 0 0 auto;
+}
+
+#hmScenarioPlotter .hm-refresh-row .hm-status {
+  flex: 1 1 auto;
+  min-width: 180px;
+}
+
     #hmScenarioPlotter .hm-msg-title{
       margin:0 0 8px 0;
       font-size:12px;
@@ -895,9 +927,9 @@
       <p class="hm-sub">
         AI scans selected sources, extracts live signals, and weights four predefined geopolitical futures to show which scenario is most likely right now.
       </p>
-       <section class="hm-card">
-      <button class="hm-btn" id="hmRefreshBtn">Refresh analysis</button>
-      <div class="hm-status" id="hmStatus">Loading latest assessment</div>
+<section class="hm-card hm-refresh-row">
+  <button class="hm-btn" id="hmRefreshBtn">Refresh analysis</button>
+  <div class="hm-status" id="hmStatus">Updated 17 min ago</div>
 </section>
 <br>
 
