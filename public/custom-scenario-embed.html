@@ -61,20 +61,20 @@
         <h1 class="hm-title"><span class="hm-badge">Hackmasters</span> Scenario Plotter</h1>
         <div class="hm-status">Done</div>
       </div>
-      <p class="hm-sub">Enter scenarios, add signal lists, and ask questions grounded in selected source feeds.</p>
+      <p class="hm-sub">Enter scenarios, add signal lists, and ask questions grounded in selected feeds and Tavily web domains.</p>
       <div class="hm-toolbar"><div class="hm-button-row"><button type="button" id="new-session">New session</button></div></div>
       <div class="scenario-grid" id="scenario-grid"></div>
       <div class="results" id="results"></div>
       <div class="sources" id="sources"></div>
       <details class="source-editor hm-card">
-        <summary>Add / edit source URLs</summary>
+        <summary>Add Tavily source / domain</summary>
         <div class="source-editor-grid">
           <input id="new-source-name" placeholder="SOURCE NAME" />
-          <input id="new-source-url" placeholder="RSS FEED URL" />
+          <input id="new-source-url" placeholder="DOMAIN OR WEBSITE, E.G. bellingcat.com" />
           <input id="new-source-reliability" placeholder="70" inputmode="numeric" />
           <button id="add-source" type="button">Add</button>
         </div>
-        <p class="small">Use RSS feed URLs. Reliability is 0-100 and is multiplied by signal relevance to produce weighting.</p>
+        <p class="small">Custom sources are searched through Tavily by domain/site. Enter a domain such as bellingcat.com, x.com, threads.net, or a full website URL.</p>
       </details>
       <div class="status" id="status"></div>
       <div class="evidence" id="evidence"></div>
@@ -86,11 +86,11 @@
       const API_BASE=new URLSearchParams(location.search).get('api')||location.origin;
       const API_URL=API_BASE.replace(/\/$/,'')+'/api/custom-scenario-assessment';
       const defaultSources=[
-        {id:'bbc-world',name:'BBC World',url:'http://feeds.bbci.co.uk/news/world/rss.xml',reliability:82,enabled:true},
-        {id:'guardian-world',name:'Guardian World',url:'https://www.theguardian.com/world/rss',reliability:78,enabled:true},
-        {id:'al-jazeera',name:'Al Jazeera',url:'https://www.aljazeera.com/xml/rss/all.xml',reliability:75,enabled:true},
-        {id:'ft-news',name:'Financial Times',url:'https://www.ft.com/news-feed?format=rss',reliability:84,enabled:true},
-        {id:'google-news',name:'Google News',url:'https://news.google.com/rss?hl=en-GB&gl=GB&ceid=GB:en',reliability:65,enabled:true}
+        {id:'bbc-world',name:'BBC World',url:'http://feeds.bbci.co.uk/news/world/rss.xml',reliability:82,enabled:true,type:'rss'},
+        {id:'guardian-world',name:'Guardian World',url:'https://www.theguardian.com/world/rss',reliability:78,enabled:true,type:'rss'},
+        {id:'al-jazeera',name:'Al Jazeera',url:'https://www.aljazeera.com/xml/rss/all.xml',reliability:75,enabled:true,type:'rss'},
+        {id:'ft-news',name:'Financial Times',url:'https://www.ft.com/news-feed?format=rss',reliability:84,enabled:true,type:'rss'},
+        {id:'google-news',name:'Google News',url:'https://news.google.com/rss?hl=en-GB&gl=GB&ceid=GB:en',reliability:65,enabled:true,type:'rss'}
       ];
       const state={sources:JSON.parse(localStorage.getItem('fsp-custom-sources')||'null')||defaultSources,latest:null};
       const scenarioGrid=document.getElementById('scenario-grid');
@@ -133,9 +133,10 @@
         sources.innerHTML='<div class="sources-title hm-card"><span class="section-label">Sources used</span><button type="button">Show</button></div>';
         state.sources.forEach((source,index)=>{
           const weight=sourceWeightsByName?.get(source.name);
+          const sourceKind=source.type==='web'?'Tavily domain':'feed';
           const line=document.createElement('div');
           line.className='source-line hm-card';
-          line.textContent=weight?`${source.name}: relevancy ${Math.round(weight.relevance_percent)}% reliability ${Math.round(weight.reliability_percent)}% = weighting ${Math.round(weight.weighting_percent)}%`:`${source.name}: reliability ${source.reliability}%`;
+          line.textContent=weight?`${source.name}: relevancy ${Math.round(weight.relevance_percent)}% reliability ${Math.round(weight.reliability_percent)}% = weighting ${Math.round(weight.weighting_percent)}%`:`${source.name}: ${sourceKind}, reliability ${source.reliability}%`;
           const toggle=document.createElement('button');
           toggle.className='source-toggle'+(source.enabled?'':' off');
           toggle.type='button';
@@ -162,9 +163,9 @@
         const scenarios=collectScenarios();
         if(!scenarios.length){status.textContent='Enter at least one scenario name or description, plus at least one signal.';return}
         const selectedSources=state.sources.filter(source=>source.enabled);
-        if(!selectedSources.length){status.textContent='Select at least one source.';return}
+        if(!selectedSources.length){status.textContent='Select at least one feed or Tavily domain.';return}
         const go=document.getElementById('go');
-        go.disabled=true;status.textContent='Scanning selected sources and estimating likelihood...';evidence.innerHTML='';
+        go.disabled=true;status.textContent='Scanning selected feeds and Tavily domains...';evidence.innerHTML='';
         try{
           const response=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scenarios,sources:selectedSources})});
           const data=await response.json();
@@ -188,13 +189,22 @@
       }
       function escapeHtml(value){return String(value||'').replace(/[&<>"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[char]))}
       function escapeAttr(value){return escapeHtml(value).replace(/'/g,'&#039;')}
+      function normaliseDomainInput(value){
+        const raw=String(value||'').trim();
+        if(!raw)return null;
+        try{
+          const parsed=new URL(raw.startsWith('http')?raw:`https://${raw}`);
+          return parsed.hostname.replace(/^www\./,'').toLowerCase();
+        }catch{return null}
+      }
       document.getElementById('add-source').addEventListener('click',()=>{
         const name=document.getElementById('new-source-name').value.trim();
-        const url=document.getElementById('new-source-url').value.trim();
+        const rawDomain=document.getElementById('new-source-url').value.trim();
+        const domain=normaliseDomainInput(rawDomain);
         const reliability=Number(document.getElementById('new-source-reliability').value||70);
-        if(!name||!url){status.textContent='Enter a source name and RSS URL.';return}
-        state.sources.push({id:`custom-${Date.now()}`,name,url,reliability:Math.max(0,Math.min(100,reliability)),enabled:true});
-        persistSources();renderSources();document.getElementById('new-source-name').value='';document.getElementById('new-source-url').value='';document.getElementById('new-source-reliability').value='';
+        if(!name||!domain){status.textContent='Enter a source name and domain or website URL.';return}
+        state.sources.push({id:`custom-web-${Date.now()}`,name,url:`https://${domain}`,homepage:`https://${domain}`,type:'web',reliability:Math.max(0,Math.min(100,reliability)),enabled:true});
+        persistSources();renderSources();document.getElementById('new-source-name').value='';document.getElementById('new-source-url').value='';document.getElementById('new-source-reliability').value='';status.textContent=`Added Tavily source domain: ${domain}.`;
       });
       document.getElementById('new-session').addEventListener('click',()=>{
         for(let i=0;i<4;i+=1){document.getElementById(`scenario-name-${i}`).value='';document.getElementById(`scenario-${i}`).value='';const textarea=document.getElementById(`signals-${i}`);textarea.value='';autoGrow(textarea)}
