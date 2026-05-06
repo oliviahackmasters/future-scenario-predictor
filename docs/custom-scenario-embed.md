@@ -7,10 +7,10 @@ This embed is a topic-agnostic subset of the scenario plotter. Users enter 1-4 s
 Replace `https://YOUR-VERCEL-DOMAIN.vercel.app` with the deployed scenario plotter domain.
 
 ```html
-<div style="width:100%;max-width:980px;margin:0 auto;">
+<div style="width:100%;max-width:1230px;margin:0 auto;">
   <iframe
     src="https://YOUR-VERCEL-DOMAIN.vercel.app/custom-scenario-embed.html?api=https://YOUR-VERCEL-DOMAIN.vercel.app"
-    style="width:100%;height:900px;border:0;background:#050505;"
+    style="width:100%;height:1040px;border:0;background:#020202;"
     loading="lazy"
     title="Custom Scenario Plotter"
   ></iframe>
@@ -46,7 +46,13 @@ Payload:
 
 The response includes `scenario_scores`, `sources_used`, `failed_sources`, and `evidence_articles`.
 
-## Notes
+## Styling notes
+
+- The embed now matches the Trend Boiler visual system: black background, thin burnt-orange borders, uppercase labels, rectangular buttons, and a Hackmasters header.
+- The results and source sections use the same divider-line layout as the Trend Boiler screen.
+- Mobile layout collapses into a single column.
+
+## Functional notes
 
 - The endpoint uses selected RSS sources only.
 - Source reliability is a 0-100 percentage.
