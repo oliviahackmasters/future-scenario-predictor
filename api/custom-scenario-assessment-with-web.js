@@ -30,12 +30,17 @@ function hostnameFromUrl(raw = "") {
   }
 }
 
-function tavilyBridgeSource({ baseUrl, domain, query, reliability = 70 }) {
+function isTavilyOnlySource(source = {}) {
+  const type = String(source.type || "").trim().toLowerCase();
+  return ["web", "site", "domain", "tavily"].includes(type);
+}
+
+function tavilyBridgeSource({ baseUrl, domain, query, name, reliability = 70 }) {
   const topic = "custom";
   const params = new URLSearchParams({ topic, domain, q: query });
   return {
     id: `tavily-${domain}-${Math.abs(query.length)}`,
-    name: `${domain} Web Search`,
+    name: name || `${domain} Web Search`,
     url: `${baseUrl}/api/tavily-rss?${params.toString()}`,
     reliability,
     enabled: true,
@@ -53,23 +58,36 @@ function addTavilySourcesToBody(req) {
   const query = compactScenarioQuery(scenarios) || "future scenario signals";
   const suppliedSources = Array.isArray(req.body.sources) ? req.body.sources : [];
 
-  const userDomains = suppliedSources
-    .map((source) => hostnameFromUrl(source?.url || source?.homepage || ""))
-    .filter(Boolean)
-    .filter((domain) => !domain.includes("news.google.com"));
+  const rssSources = suppliedSources.filter((source) => !isTavilyOnlySource(source));
+  const customTavilySources = suppliedSources
+    .filter(isTavilyOnlySource)
+    .map((source) => {
+      const domain = hostnameFromUrl(source?.url || source?.homepage || source?.domain || "");
+      if (!domain || domain.includes("news.google.com")) return null;
+      return tavilyBridgeSource({
+        baseUrl,
+        domain,
+        query,
+        name: source?.name ? `${source.name} Web Search` : undefined,
+        reliability: Number(source?.reliability ?? source?.reliability_percent ?? 70)
+      });
+    })
+    .filter(Boolean);
 
-  const domains = Array.from(new Set([
+  const defaultDomains = [
     "reuters.com",
     "reddit.com",
-    "substack.com",
-    ...userDomains
-  ])).slice(0, 8);
+    "substack.com"
+  ];
 
-  const tavilySources = domains.map((domain) => tavilyBridgeSource({ baseUrl, domain, query }));
+  const defaultTavilySources = defaultDomains.map((domain) => tavilyBridgeSource({ baseUrl, domain, query }));
+  const dedupedTavilySources = Array.from(new Map(
+    [...defaultTavilySources, ...customTavilySources].map((source) => [source.url, source])
+  ).values());
 
   req.body.sources = [
-    ...suppliedSources,
-    ...tavilySources
+    ...rssSources,
+    ...dedupedTavilySources
   ];
 }
 
