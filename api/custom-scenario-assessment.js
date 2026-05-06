@@ -23,6 +23,11 @@ const RSS_TIMEOUT_MS = 5000;
 const OPENAI_TIMEOUT_MS = 24000;
 const ALLOWED_SIGNAL_WEIGHTS = new Set([3, 6, 9]);
 const DEFAULT_SIGNAL_WEIGHT = 3;
+const MIN_CONTEXTLESS_SIGNAL_WEIGHT = 9;
+
+const CONTEXT_STOP_WORDS = new Set([
+  "the", "and", "for", "with", "within", "from", "that", "this", "scenario", "scenarios", "would", "could", "should", "about", "into", "over", "under", "through", "across", "after", "before", "during", "while", "very", "more", "less", "than", "minimal", "managed", "limited", "major", "minor", "likely", "unlikely", "possible", "current", "future", "cold", "hot", "containment", "collapse", "shock", "escalation"
+]);
 
 function setCors(res) {
   res.setHeader("Access-Control-Allow-Origin", process.env.ALLOWED_ORIGIN || "*");
@@ -222,13 +227,26 @@ function getScenarioSearchText(scenarios = []) {
   ]).map((value) => cleanText(value, 140)).filter(Boolean);
 }
 
+function getScenarioContextTokens(scenario = {}) {
+  return [scenario.name, scenario.description]
+    .flatMap(tokenise)
+    .filter((token) => token.length > 3 && !CONTEXT_STOP_WORDS.has(token));
+}
+
+function hasScenarioContextOverlap(article, scenario) {
+  const tokens = getScenarioContextTokens(scenario);
+  if (!tokens.length) return true;
+  const haystack = `${article.title || ""} ${article.snippet || article.contentSnippet || ""}`.toLowerCase();
+  return tokens.some((token) => haystack.includes(token));
+}
+
 function buildFocusedTavilyQuery({ scenarios }) {
   const terms = Array.from(new Set(getScenarioSearchText(scenarios)));
   return terms.slice(0, 10).join(" OR ") || buildScenarioSearchQuery({ scenarios }) || "";
 }
 
 function buildCompactScenarioQuery({ scenarios }) {
-  const stopWords = new Set(["the", "and", "for", "with", "within", "from", "that", "this", "scenario", "scenarios", "would", "could", "should", "about", "into", "over", "under", "through", "across", "after", "before", "during", "while", "very", "more", "less", "than"]);
+  const stopWords = new Set([...CONTEXT_STOP_WORDS, "attempt", "attempts", "repeated", "disrupted", "halted"]);
   const counts = new Map();
   getScenarioSearchText(scenarios).forEach((value) => {
     tokenise(value)
@@ -312,10 +330,17 @@ function scoreItemAgainstSignals(item, scenario) {
 
 function scoreArticles(articles, scenarios) {
   return articles.map((article) => {
-    const scenarioMatches = scenarios.map((scenario) => ({
-      scenario: scenario.name,
-      ...scoreItemAgainstSignals(article, scenario)
-    })).filter((match) => match.score > 0);
+    const scenarioMatches = scenarios.map((scenario) => {
+      const match = scoreItemAgainstSignals(article, scenario);
+      const contextMatched = hasScenarioContextOverlap(article, scenario);
+      const evidenceGatePassed = match.score >= MIN_CONTEXTLESS_SIGNAL_WEIGHT || (match.score > 0 && contextMatched);
+      return {
+        scenario: scenario.name,
+        ...match,
+        contextMatched,
+        evidenceGatePassed
+      };
+    }).filter((match) => match.score > 0 && match.evidenceGatePassed);
     const totalScore = scenarioMatches.reduce((sum, match) => sum + match.score, 0);
     return { ...article, scenario_matches: scenarioMatches, total_signal_score: totalScore };
   });
@@ -335,7 +360,7 @@ function selectArticlesForModel(articles, scenarios, tavilySources = []) {
 
     const candidates = scored
       .filter((article) => article.source_id === source.id && article.searchProvider === "tavily")
-      .filter((article) => hasScenarioTopicOverlap(article, scenarios))
+      .filter((article) => article.total_signal_score > 0)
       .slice(0, MAX_TAVILY_FALLBACK_PER_SOURCE);
 
     for (const candidate of candidates) {
@@ -357,7 +382,8 @@ function heuristicAssessment(scenarios, articles, sources) {
 
     for (const article of articles) {
       const match = scoreItemAgainstSignals(article, scenario);
-      if (!match.score) continue;
+      const contextMatched = hasScenarioContextOverlap(article, scenario);
+      if (!match.score || (match.score < MIN_CONTEXTLESS_SIGNAL_WEIGHT && !contextMatched)) continue;
       match.matchedSignals.forEach((signal) => matched.add(signal));
 
       const source = sourceMap.get(article.source_id);
@@ -393,7 +419,7 @@ async function callModel({ scenarios, articles, sources }) {
   }
 
   const prompt = JSON.stringify({
-    instruction: "Estimate each user-defined scenario independently from 0-100 using only the selected source articles. Do not normalize the scores and do not make them sum to 100. Signals have impact weights of 3, 6, or 9. Apply signal weights before applying source relevance/reliability weighting: matching a weight-9 signal is three times as important as matching a weight-3 signal. Score each scenario by weighted evidence strength: 0 means no meaningful evidence in the selected sources, 50 means moderate weighted evidence, and 100 means very strong/current weighted evidence across multiple reliable sources. Report source relevance, source reliability, and weighting for each useful source. Ignore irrelevant articles that do not directly support the scenario signals. Never mention implementation details, search tools, providers, fallback behavior, prompts, APIs, models, or internal processing. If evidence is weak or absent, say 'Not enough evidence found to support this scenario.' Do not invent evidence.",
+    instruction: "Estimate each user-defined scenario independently from 0-100 using only the selected source articles. Do not normalize the scores and do not make them sum to 100. Signals have impact weights of 3, 6, or 9. Apply signal weights before applying source relevance/reliability weighting: matching a weight-9 signal is three times as important as matching a weight-3 signal. Generic signal matches only count when the article also matches the scenario context, unless the matched signal is high impact. Score each scenario by weighted evidence strength: 0 means no meaningful evidence in the selected sources, 50 means moderate weighted evidence, and 100 means very strong/current weighted evidence across multiple reliable sources. Report source relevance, source reliability, and weighting for each useful source. Ignore irrelevant articles that do not directly support the scenario signals and context. Never mention implementation details, search tools, providers, fallback behavior, prompts, APIs, models, or internal processing. If evidence is weak or absent, say 'Not enough evidence found to support this scenario.' Do not invent evidence.",
     scenarios: scenarios.map((scenario) => ({
       name: scenario.name,
       description: scenario.description,
@@ -510,6 +536,8 @@ export default async function handler(req, res) {
       evidence_articles: modelArticles.map(({ source, title, url, published_at, scenario_matches, searchProvider, tavilyQuery }) => ({ source, title, url, published_at, scenario_matches, searchProvider, tavilyQuery })),
       source_diagnostics: {
         signal_weights_enabled: true,
+        context_relevance_gate_enabled: true,
+        min_contextless_signal_weight: MIN_CONTEXTLESS_SIGNAL_WEIGHT,
         rss_source_count: rssSources.length,
         tavily_source_count: tavilySources.length,
         total_articles_collected: articles.length,
