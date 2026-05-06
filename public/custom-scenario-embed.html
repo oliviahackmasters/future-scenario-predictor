@@ -227,10 +227,59 @@
         postHeight();
       }
       function renderEvidenceUsed(data){
-        const articles=(data.evidence_articles||[]).slice(0,12);
-        evidenceUsed.innerHTML=`<div class="section-label">Evidence used in prediction</div><p class="small">These are the articles that survived filtering and were supplied as evidence for the assessment.</p>` + (articles.length?articles.map(article=>`<div class="evidence-item"><strong>${escapeHtml(article.source)}</strong>: <a href="${escapeAttr(article.url)}" target="_blank" rel="noopener">${escapeHtml(article.title)}</a></div>`).join(''):'<div class="evidence-item">No evidence articles were returned for this assessment.</div>');
-        postHeight();
-      }
+  const articles=(
+    data.articles ||
+    data.evidence_articles ||
+    data.selected_articles ||
+    data.evidence ||
+    []
+  ).slice(0,12).map(article=>({
+    source: article.source || article.sourceName || article.name || 'Unknown source',
+    title: article.title || article.headline || article.name || 'Untitled article',
+    snippet: article.snippet || article.summary || article.description || '',
+    url: article.url || article.link || article.href || '',
+    published_at: article.published_at || article.publishedAt || article.date || null,
+    article_age_days: article.article_age_days ?? article.articleAgeDays ?? null,
+    evidence_quality: article.evidence_quality || article.quality || '',
+    matched_before_model: article.matched_before_model || article.scenario_matches || []
+  }));
+
+  evidenceUsed.innerHTML =
+    `<div class="section-label">Evidence used in prediction</div>
+     <p class="small">These are the articles that survived filtering and were supplied as evidence for the assessment.</p>` +
+    (
+      articles.length
+        ? articles.map(article=>{
+            const ageText = article.article_age_days !== null && article.article_age_days !== undefined
+              ? ` · ${article.article_age_days} days old`
+              : '';
+
+            const dateText = article.published_at
+              ? `Published: ${escapeHtml(new Date(article.published_at).toLocaleString())}`
+              : 'Published date unavailable';
+
+            const matches = article.matched_before_model
+              .flatMap(match => match.matchedSignals || [])
+              .filter(Boolean)
+              .slice(0,4);
+
+            return `<div class="evidence-item">
+              <strong>${escapeHtml(article.source)}</strong>${ageText}<br>
+              ${
+                article.url
+                  ? `<a href="${escapeAttr(article.url)}" target="_blank" rel="noopener">${escapeHtml(article.title)}</a>`
+                  : escapeHtml(article.title)
+              }
+              <div class="small">${dateText}${article.evidence_quality ? ` · ${escapeHtml(article.evidence_quality)}` : ''}</div>
+              ${article.snippet ? `<p class="small">${escapeHtml(article.snippet)}</p>` : ''}
+              ${matches.length ? `<p class="small">Matched: ${escapeHtml(matches.join(', '))}</p>` : ''}
+            </div>`;
+          }).join('')
+        : '<div class="evidence-item">No evidence articles were returned for this assessment.</div>'
+    );
+
+  postHeight();
+}
       function collectScenarios(){
         const scenarios=[];
         for(let i=0;i<4;i+=1){
