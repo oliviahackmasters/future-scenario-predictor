@@ -54,6 +54,60 @@ function normaliseUrl(value) {
   }
 }
 
+function scrubImplementationDetails(value, fallback = "Not enough evidence found to support this scenario.") {
+  const raw = cleanText(value, 1400);
+  if (!raw) return fallback;
+
+  const lower = raw.toLowerCase();
+  const banned = [
+    "tavily",
+    "openai",
+    "gpt",
+    "model",
+    "ai",
+    "llm",
+    "fallback",
+    "search provider",
+    "search_provider",
+    "rss parser",
+    "api",
+    "backend",
+    "prompt",
+    "token",
+    "timeout",
+    "timed out"
+  ];
+
+  if (banned.some((term) => lower.includes(term))) return fallback;
+
+  return raw
+    .replace(/\bTavily\b/gi, "the selected sources")
+    .replace(/\bOpenAI\b/gi, "the assessment")
+    .replace(/\bGPT[-\w.]*\b/gi, "the assessment")
+    .replace(/\bLLM\b/gi, "the assessment")
+    .replace(/\bAI\b/gi, "the assessment")
+    .replace(/\bmodel\b/gi, "assessment")
+    .replace(/\bfallback\b/gi, "available")
+    .replace(/\bsearch provider\b/gi, "source")
+    .replace(/\bAPI\b/g, "source")
+    .replace(/\bbackend\b/gi, "source system")
+    .replace(/\bprompt\b/gi, "evidence set")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function scrubAssessmentOutput(assessment = {}) {
+  return {
+    ...assessment,
+    scenario_scores: Array.isArray(assessment.scenario_scores)
+      ? assessment.scenario_scores.map((score) => ({
+          ...score,
+          rationale: scrubImplementationDetails(score.rationale)
+        }))
+      : []
+  };
+}
+
 function tokenise(value) {
   return cleanText(value, 1000)
     .toLowerCase()
@@ -204,7 +258,7 @@ async function fetchCustomTavilyArticles({ source, scenarios }) {
     }));
   }
 
-  console.warn("No Tavily results for custom source", { source: source.name, domain, attempts });
+  console.warn("No web results for custom source", { source: source.name, domain, attempts });
   return [];
 }
 
@@ -288,7 +342,7 @@ function heuristicAssessment(scenarios, articles, sources) {
       likelihood_percent: likelihood,
       rationale: matched.size
         ? `Matched ${matched.size} of ${scenario.signals.length} user-defined signal(s) in selected sources. This score is independent, not normalized against other scenarios.`
-        : "No strong signal match found in selected sources; independent likelihood is therefore low.",
+        : "Not enough evidence found to support this scenario.",
       matched_signals: Array.from(matched),
       source_weights: sourceWeights.slice(0, 6)
     };
@@ -297,11 +351,11 @@ function heuristicAssessment(scenarios, articles, sources) {
 
 async function callModel({ scenarios, articles, sources }) {
   if (!openai || articles.length === 0) {
-    return { scenario_scores: heuristicAssessment(scenarios, articles, sources), confidence: articles.length ? "medium" : "low" };
+    return scrubAssessmentOutput({ scenario_scores: heuristicAssessment(scenarios, articles, sources), confidence: articles.length ? "medium" : "low" });
   }
 
   const prompt = JSON.stringify({
-    instruction: "Estimate each user-defined scenario independently from 0-100 using only the selected source articles. Do not normalize the scores and do not make them sum to 100. A single scenario should not automatically be 100%; two scenarios should not automatically be 50/50. Score each scenario by evidence strength: 0 means no meaningful evidence in the selected sources, 50 means moderate evidence, and 100 means very strong/current evidence across multiple reliable sources. Report source relevance, source reliability, and weighting for each useful source. Ignore irrelevant articles, including Tavily fallback articles that do not directly support the scenario signals. Do not invent evidence.",
+    instruction: "Estimate each user-defined scenario independently from 0-100 using only the selected source articles. Do not normalize the scores and do not make them sum to 100. A single scenario should not automatically be 100%; two scenarios should not automatically be 50/50. Score each scenario by evidence strength: 0 means no meaningful evidence in the selected sources, 50 means moderate evidence, and 100 means very strong/current evidence across multiple reliable sources. Report source relevance, source reliability, and weighting for each useful source. Ignore irrelevant articles that do not directly support the scenario signals. Never mention implementation details, search tools, providers, fallback behavior, prompts, APIs, models, or internal processing. If evidence is weak or absent, say 'Not enough evidence found to support this scenario.' Do not invent evidence.",
     scenarios,
     selected_sources: sources.map(({ id, name, url, reliability, type, domain }) => ({ id, name, url, type, domain, reliability_percent: reliability })),
     articles: articles.map((article) => ({
@@ -312,8 +366,6 @@ async function callModel({ scenarios, articles, sources }) {
       snippet: article.snippet,
       url: article.url,
       published_at: article.published_at,
-      search_provider: article.searchProvider,
-      tavily_query: article.tavilyQuery,
       matched_before_model: article.scenario_matches
     }))
   }, null, 2);
@@ -360,7 +412,7 @@ async function callModel({ scenarios, articles, sources }) {
     openai.responses.create({
       model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
       input: [
-        { role: "developer", content: [{ type: "input_text", text: "Return compact JSON only. Ground every independent likelihood in the supplied article snippets and user-defined signals. Never normalize scenario scores against each other." }] },
+        { role: "developer", content: [{ type: "input_text", text: "Return compact JSON only. Ground every independent likelihood in the supplied article snippets and user-defined signals. Never normalize scenario scores against each other. Never mention implementation details such as AI, models, prompts, APIs, or source-search technology in user-facing text." }] },
         { role: "user", content: [{ type: "input_text", text: prompt }] }
       ],
       temperature: 0.2,
@@ -371,7 +423,7 @@ async function callModel({ scenarios, articles, sources }) {
   ]);
 
   const output = response.output_text || response.output?.[0]?.content?.[0]?.text || "{}";
-  return JSON.parse(output);
+  return scrubAssessmentOutput(JSON.parse(output));
 }
 
 export default async function handler(req, res) {
@@ -403,7 +455,7 @@ export default async function handler(req, res) {
     const tavilyResults = await Promise.allSettled(tavilySources.map((source) => fetchCustomTavilyArticles({ source, scenarios })));
     tavilyResults.forEach((result, index) => {
       if (result.status === "fulfilled") articles.push(...result.value);
-      else failed_sources.push({ name: tavilySources[index].name, url: tavilySources[index].url, error: result.reason?.message || "Tavily search failed" });
+      else failed_sources.push({ name: tavilySources[index].name, url: tavilySources[index].url, error: result.reason?.message || "Source search failed" });
     });
 
     const modelArticles = selectArticlesForModel(articles, scenarios, tavilySources);
